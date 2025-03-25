@@ -1,0 +1,3901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voxel Adventure - Character Creator & Game</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    :root {
+      --primary-color: #4834d4;
+      --secondary-color: #30336b;
+      --accent-color: #6ab04c;
+      --bg-color: #130f40;
+      --dark-color: #0c0835;
+      --light-color: #f9ca24;
+      --text-color: #dff9fb;
+      --danger-color: #eb4d4b;
+      --success-color: #22a6b3;
+      
+      --head-color: #ffbe76;
+      --body-color: #ff7979;
+      --arm-color: #ffbe76;
+      --leg-color: #7ed6df;
+      --eye-color: #130f40;
+      --hair-color: #535c68;
+      --accessory-color: #f0932b;
+      
+      --map-width: 40;
+      --map-height: 25;
+      --tile-size: 1;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Press Start 2P', 'Courier New', monospace;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      overflow: hidden;
+      display: flex;
+      height: 100vh;
+    }
+
+    /* Character Creator Sidebar */
+    .creator-panel {
+      width: 320px;
+      height: 100%;
+      background-color: var(--dark-color);
+      padding: 16px;
+      overflow-y: auto;
+      transition: transform 0.3s;
+      z-index: 10;
+    }
+
+    .creator-panel.hidden {
+      transform: translateX(-320px);
+    }
+
+    .toggle-panel {
+      position: absolute;
+      left: 320px;
+      top: 20px;
+      background-color: var(--primary-color);
+      color: var(--text-color);
+      border: none;
+      width: 32px;
+      height: 32px;
+      font-size: 18px;
+      cursor: pointer;
+      z-index: 11;
+      transition: left 0.3s;
+    }
+
+    .toggle-panel.hidden {
+      left: 0;
+    }
+    
+    /* Chatbot Window */
+    .chatbot-panel {
+      position: absolute;
+      right: -320px;
+      top: 0;
+      width: 320px;
+      height: 100%;
+      background-color: var(--dark-color);
+      padding: 16px;
+      overflow-y: auto;
+      transition: transform 0.3s;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .chatbot-panel.visible {
+      transform: translateX(-320px);
+    }
+    
+    .toggle-chatbot {
+      position: absolute;
+      right: 0;
+      top: 20px;
+      background-color: var(--primary-color);
+      color: var(--text-color);
+      border: none;
+      width: 32px;
+      height: 32px;
+      font-size: 18px;
+      cursor: pointer;
+      z-index: 11;
+    }
+    
+    .chat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    
+    .chat-header h2 {
+      margin: 0;
+    }
+    
+    .model-selector {
+      margin-bottom: 16px;
+    }
+    
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      margin-bottom: 16px;
+      background-color: rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    
+    .message {
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      max-width: 85%;
+    }
+    
+    .message.user {
+      background-color: var(--primary-color);
+      align-self: flex-end;
+      margin-left: auto;
+    }
+    
+    .message.ai {
+      background-color: var(--secondary-color);
+      align-self: flex-start;
+    }
+    
+    .chat-input {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .chat-input input {
+      flex: 1;
+      background-color: var(--secondary-color);
+      color: var(--text-color);
+      border: 2px solid var(--primary-color);
+      padding: 8px 12px;
+      font-family: inherit;
+      font-size: 12px;
+      border-radius: 4px;
+    }
+    
+    .chat-input button {
+      background-color: var(--accent-color);
+      flex: 0 0 auto;
+    }
+    
+    .word-bubble {
+      position: absolute;
+      background-color: white;
+      color: black;
+      padding: 10px 15px;
+      border-radius: 20px;
+      max-width: 200px;
+      font-size: 14px;
+      text-align: center;
+      transform: translate(-50%, -100%);
+      filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.3));
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 20;
+    }
+    
+    .word-bubble:after {
+      content: '';
+      position: absolute;
+      bottom: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 10px 10px 0;
+      border-style: solid;
+      border-color: white transparent transparent;
+    }
+    
+    .word-bubble.visible {
+      opacity: 1;
+    }
+    
+    .loading-indicator {
+      display: inline-block;
+      margin-left: 5px;
+    }
+    
+    .loading-indicator:after {
+      content: '...';
+      animation: loading 1.5s infinite;
+    }
+    
+    @keyframes loading {
+      0% { content: '.'; }
+      33% { content: '..'; }
+      66% { content: '...'; }
+    }
+
+    .game-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    h1, h2, h3 {
+      color: var(--light-color);
+      text-align: center;
+      margin: 8px 0;
+      text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+    }
+
+    h1 {
+      font-size: 18px;
+    }
+
+    h2 {
+      font-size: 16px;
+      border-bottom: 2px solid var(--primary-color);
+      padding-bottom: 8px;
+      margin-top: 20px;
+    }
+
+    .section {
+      background-color: rgba(0, 0, 0, 0.3);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 10px 0;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      margin: 10px 0;
+      gap: 10px;
+    }
+
+    label {
+      font-size: 12px;
+      flex-shrink: 0;
+      width: 100px;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      height: 8px;
+      appearance: none;
+      background: var(--secondary-color);
+      border-radius: 4px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: var(--light-color);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    select, button {
+      background-color: var(--secondary-color);
+      color: var(--text-color);
+      border: 2px solid var(--primary-color);
+      padding: 8px 12px;
+      font-family: inherit;
+      font-size: 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    select:hover, button:hover {
+      background-color: var(--primary-color);
+    }
+
+    button.action {
+      background-color: var(--accent-color);
+      margin-top: 16px;
+      padding: 12px;
+      font-size: 14px;
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+
+    button.action:hover {
+      background-color: var(--success-color);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .color-picker {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .color-option {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 2px solid transparent;
+    }
+
+    .color-option.selected {
+      border-color: var(--light-color);
+      transform: scale(1.1);
+    }
+
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .preset-btn {
+      text-align: center;
+      background-color: var(--secondary-color);
+      border: 2px solid var(--primary-color);
+      padding: 10px 5px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .preset-btn:hover {
+      background-color: var(--primary-color);
+    }
+
+    #character-preview {
+      width: 100%;
+      height: 200px;
+      background-color: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      margin-top: 10px;
+      position: relative;
+      cursor: grab;
+    }
+    
+    #character-preview:active {
+      cursor: grabbing;
+    }
+    
+    #character-preview:after {
+      content: "Drag to rotate • Scroll to zoom";
+      position: absolute;
+      bottom: 5px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.7);
+      pointer-events: none;
+    }
+
+    /* Game UI Elements */
+    .game-ui {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .stats-panel {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background-color: rgba(0, 0, 0, 0.7);
+      border: 2px solid var(--primary-color);
+      padding: 10px;
+      border-radius: 8px;
+      display: flex;
+      gap: 20px;
+    }
+
+    .stat {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .stat-icon {
+      width: 20px;
+      height: 20px;
+      background-color: var(--light-color);
+      border-radius: 4px;
+    }
+
+    .dialog-box {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80%;
+      background-color: rgba(0, 0, 0, 0.8);
+      border: 2px solid var(--light-color);
+      border-radius: 8px;
+      padding: 15px;
+      font-size: 14px;
+      display: none;
+      pointer-events: auto;
+    }
+
+    .game-over {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.8);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      display: none;
+      pointer-events: auto;
+    }
+
+    .game-over h2 {
+      font-size: 32px;
+      color: var(--danger-color);
+      margin-bottom: 30px;
+    }
+
+    .controls-info {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background-color: rgba(0, 0, 0, 0.7);
+      border: 2px solid var(--secondary-color);
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+
+    .intro-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: var(--dark-color);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 30px;
+      z-index: 5;
+    }
+
+    .intro-screen h1 {
+      font-size: 40px;
+      color: var(--light-color);
+      text-shadow: 4px 4px 0 var(--primary-color);
+    }
+
+    .intro-screen p {
+      font-size: 16px;
+      color: var(--text-color);
+      text-align: center;
+      max-width: 600px;
+    }
+
+    .blink {
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    @media (max-width: 768px) {
+      .creator-panel {
+        width: 250px;
+      }
+      
+      .toggle-panel {
+        left: 250px;
+      }
+      
+      .creator-panel.hidden {
+        transform: translateX(-250px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Character Creator Panel -->
+  <div class="creator-panel">
+    <h1>VOXEL ADVENTURE</h1>
+    <div id="character-preview"></div>
+    
+    <h2>APPEARANCE</h2>
+    <div class="section">
+      <div class="row">
+        <label for="head-color">HEAD:</label>
+        <div class="color-picker" data-part="head" id="head-color">
+          <div class="color-option selected" style="background-color: #ffbe76;" data-color="#ffbe76"></div>
+          <div class="color-option" style="background-color: #f6e58d;" data-color="#f6e58d"></div>
+          <div class="color-option" style="background-color: #f0932b;" data-color="#f0932b"></div>
+          <div class="color-option" style="background-color: #6ab04c;" data-color="#6ab04c"></div>
+        </div>
+      </div>
+      
+      <div class="row">
+        <label for="body-color">BODY:</label>
+        <div class="color-picker" data-part="body" id="body-color">
+          <div class="color-option selected" style="background-color: #ff7979;" data-color="#ff7979"></div>
+          <div class="color-option" style="background-color: #badc58;" data-color="#badc58"></div>
+          <div class="color-option" style="background-color: #686de0;" data-color="#686de0"></div>
+          <div class="color-option" style="background-color: #e056fd;" data-color="#e056fd"></div>
+        </div>
+      </div>
+      
+      <div class="row">
+        <label for="hair-color">HAIR:</label>
+        <div class="color-picker" data-part="hair" id="hair-color">
+          <div class="color-option selected" style="background-color: #535c68;" data-color="#535c68"></div>
+          <div class="color-option" style="background-color: #f9ca24;" data-color="#f9ca24"></div>
+          <div class="color-option" style="background-color: #eb4d4b;" data-color="#eb4d4b"></div>
+          <div class="color-option" style="background-color: #22a6b3;" data-color="#22a6b3"></div>
+        </div>
+      </div>
+    </div>
+    
+    <h2>STYLE</h2>
+    <div class="section">
+      <div class="row">
+        <label for="body-type">BODY TYPE:</label>
+        <select id="body-type">
+          <option value="normal">NORMAL</option>
+          <option value="slim">SLIM</option>
+          <option value="wide">WIDE</option>
+          <option value="short">SHORT</option>
+        </select>
+      </div>
+      
+      <div class="row">
+        <label for="hair-style">HAIR STYLE:</label>
+        <select id="hair-style">
+          <option value="none">NONE</option>
+          <option value="short">SHORT</option>
+          <option value="long">LONG</option>
+          <option value="spike">SPIKE</option>
+          <option value="mohawk">MOHAWK</option>
+        </select>
+      </div>
+      
+      <div class="row">
+        <label for="accessory">ACCESSORY:</label>
+        <select id="accessory">
+          <option value="none">NONE</option>
+          <option value="hat">HAT</option>
+          <option value="crown">CROWN</option>
+          <option value="sword">SWORD</option>
+          <option value="shield">SHIELD</option>
+        </select>
+      </div>
+    </div>
+    
+    <h2>GAME VERSION</h2>
+    <div class="section">
+      <div class="row">
+        <label for="game-version">VERSION:</label>
+        <select id="game-version">
+          <option value="1">VERSION 1.0 - FIXED MAPS</option>
+          <option value="2">VERSION 2.1 - DFS MAZE</option>
+          <option value="3">VERSION 2.2 - KRUSKAL'S MAZE</option>
+          <option value="4">VERSION 2.3 - PRIM'S MAZE</option>
+          <option value="5">VERSION 2.4 - RECURSIVE DIVISION</option>
+          <option value="6">VERSION 2.5 - BINARY TREE</option>
+        </select>
+      </div>
+    </div>
+
+    <h2>PRESETS</h2>
+    <div class="section">
+      <div class="preset-grid">
+        <div class="preset-btn" data-preset="hero">HERO</div>
+        <div class="preset-btn" data-preset="wizard">WIZARD</div>
+        <div class="preset-btn" data-preset="warrior">WARRIOR</div>
+        <div class="preset-btn" data-preset="ninja">NINJA</div>
+        <div class="preset-btn" data-preset="random">RANDOM</div>
+        <div class="preset-btn" data-preset="princess">PRINCESS</div>
+      </div>
+    </div>
+    
+    <button id="start-game" class="action">START ADVENTURE</button>
+  </div>
+
+  <button class="toggle-panel">▶</button>
+  
+  <!-- Chatbot Panel -->
+  <div class="chatbot-panel">
+    <div class="chat-header">
+      <h2>NPC CHAT</h2>
+      <select id="model-selector" class="model-selector">
+        <option value="loading">Loading models...</option>
+      </select>
+    </div>
+    <div id="chat-messages" class="chat-messages"></div>
+    <div class="chat-input">
+      <input type="text" id="chat-input" placeholder="Type your message..." />
+      <button id="send-message" class="action">SEND</button>
+    </div>
+  </div>
+  
+  <button class="toggle-chatbot">◀</button>
+  
+  <!-- Game Container -->
+  <div class="game-container">
+    <div id="game-canvas"></div>
+    
+    <!-- UI Elements on top of canvas -->
+    <div class="game-ui">
+      <div class="stats-panel">
+        <div class="stat">
+          <div class="stat-icon" style="background-color: #eb4d4b;"></div>
+          <span id="health">3</span>
+        </div>
+        <div class="stat">
+          <div class="stat-icon" style="background-color: #f9ca24;"></div>
+          <span id="coins">0</span>
+        </div>
+      </div>
+      
+      <div class="controls-info">
+        <p>W / A / S / D - Move</p>
+        <p>SPACE - Action</p>
+        <p>P - Pause Game</p>
+      </div>
+      
+      <div class="dialog-box" id="dialog">
+        Welcome to Voxel Adventure! Collect coins and find the key to unlock the exit.
+      </div>
+      
+      <div class="game-over">
+        <h2>GAME OVER</h2>
+        <button id="restart-btn" class="action">TRY AGAIN</button>
+      </div>
+      
+      <!-- NPC Word Bubble -->
+      <div id="word-bubble" class="word-bubble"></div>
+    </div>
+    
+    <!-- Intro Screen -->
+    <div class="intro-screen" id="intro-screen">
+      <h1>VOXEL ADVENTURE</h1>
+      <p>Create your character and embark on an epic quest through the voxel realm!</p>
+      <p class="blink">Click to continue</p>
+    </div>
+  </div>
+
+  <script>
+    // Character Creator Logic
+    let characterConfig = {
+      colors: {
+        head: '#ffbe76',
+        body: '#ff7979',
+        arm: '#ffbe76',
+        leg: '#7ed6df',
+        eye: '#130f40',
+        hair: '#535c68',
+        accessory: '#f0932b'
+      },
+      style: {
+        bodyType: 'normal',
+        hairStyle: 'none',
+        accessory: 'none'
+      }
+    };
+
+    const presets = {
+      hero: {
+        colors: {
+          head: '#ffbe76',
+          body: '#6ab04c',
+          arm: '#ffbe76',
+          leg: '#535c68',
+          hair: '#f9ca24'
+        },
+        style: {
+          bodyType: 'normal',
+          hairStyle: 'short',
+          accessory: 'sword'
+        }
+      },
+      wizard: {
+        colors: {
+          head: '#ffbe76',
+          body: '#686de0',
+          arm: '#ffbe76',
+          leg: '#130f40',
+          hair: '#535c68'
+        },
+        style: {
+          bodyType: 'slim',
+          hairStyle: 'long',
+          accessory: 'hat'
+        }
+      },
+      warrior: {
+        colors: {
+          head: '#f0932b',
+          body: '#e056fd',
+          arm: '#f0932b',
+          leg: '#535c68',
+          hair: '#535c68'
+        },
+        style: {
+          bodyType: 'wide',
+          hairStyle: 'short',
+          accessory: 'shield'
+        }
+      },
+      ninja: {
+        colors: {
+          head: '#ffbe76',
+          body: '#130f40',
+          arm: '#ffbe76',
+          leg: '#130f40',
+          hair: '#130f40'
+        },
+        style: {
+          bodyType: 'slim',
+          hairStyle: 'none',
+          accessory: 'sword'
+        }
+      },
+      princess: {
+        colors: {
+          head: '#ffbe76',
+          body: '#e056fd',
+          arm: '#ffbe76',
+          leg: '#e056fd',
+          hair: '#f9ca24'
+        },
+        style: {
+          bodyType: 'slim',
+          hairStyle: 'long',
+          accessory: 'crown'
+        }
+      }
+    };
+
+    // Initialize Three.js Character Preview
+    let characterPreview = {
+      scene: null,
+      camera: null,
+      renderer: null,
+      character: null,
+      animationId: null
+    };
+
+    function initCharacterPreview() {
+      // Setup the scene
+      characterPreview.scene = new THREE.Scene();
+      characterPreview.scene.background = new THREE.Color(0x130f40);
+      
+      // Setup the camera
+      characterPreview.camera = new THREE.PerspectiveCamera(
+        50, 
+        document.getElementById('character-preview').clientWidth / document.getElementById('character-preview').clientHeight, 
+        0.1, 
+        1000
+      );
+      characterPreview.camera.position.set(0, 2, 10);
+      characterPreview.camera.lookAt(0, 2, 0);
+      
+      // Setup renderer
+      characterPreview.renderer = new THREE.WebGLRenderer({ antialias: true });
+      characterPreview.renderer.setSize(
+        document.getElementById('character-preview').clientWidth,
+        document.getElementById('character-preview').clientHeight
+      );
+      document.getElementById('character-preview').appendChild(characterPreview.renderer.domElement);
+      
+      // Add lights
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+      characterPreview.scene.add(ambientLight);
+      
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(10, 10, 10);
+      characterPreview.scene.add(directionalLight);
+      
+      // Create character
+      createVoxelCharacter();
+      
+      // Add mouse controls for rotation and zoom
+      characterPreview.isDragging = false;
+      characterPreview.previousMousePosition = { x: 0, y: 0 };
+      characterPreview.rotationSpeed = 0.01;
+      characterPreview.zoom = 10;
+      characterPreview.minZoom = 5;
+      characterPreview.maxZoom = 15;
+
+      // Mouse down event for rotation
+      document.getElementById('character-preview').addEventListener('mousedown', (e) => {
+        characterPreview.isDragging = true;
+        characterPreview.previousMousePosition = {
+          x: e.clientX,
+          y: e.clientY
+        };
+        e.preventDefault();
+      });
+
+      // Mouse move event for rotation
+      document.addEventListener('mousemove', (e) => {
+        if (characterPreview.isDragging && characterPreview.character) {
+          const deltaMove = {
+            x: e.clientX - characterPreview.previousMousePosition.x,
+            y: e.clientY - characterPreview.previousMousePosition.y
+          };
+
+          characterPreview.character.rotation.y += deltaMove.x * characterPreview.rotationSpeed;
+          characterPreview.character.rotation.x += deltaMove.y * characterPreview.rotationSpeed;
+          
+          characterPreview.previousMousePosition = {
+            x: e.clientX,
+            y: e.clientY
+          };
+        }
+      });
+
+      // Mouse up event to stop rotation
+      document.addEventListener('mouseup', () => {
+        characterPreview.isDragging = false;
+      });
+
+      // Mouse wheel event for zoom
+      document.getElementById('character-preview').addEventListener('wheel', (e) => {
+        e.preventDefault();
+        
+        // Adjust zoom level
+        characterPreview.zoom += e.deltaY * 0.01;
+        
+        // Clamp zoom level
+        characterPreview.zoom = Math.max(characterPreview.minZoom, Math.min(characterPreview.maxZoom, characterPreview.zoom));
+        
+        // Update camera position
+        characterPreview.camera.position.z = characterPreview.zoom;
+        characterPreview.camera.lookAt(0, 2, 0);
+      });
+      
+      // Animation loop
+      function animate() {
+        characterPreview.animationId = requestAnimationFrame(animate);
+        
+        // Only auto-rotate if not being controlled by the user
+        if (characterPreview.character && !characterPreview.isDragging) {
+          characterPreview.character.rotation.y += 0.005;
+        }
+        
+        characterPreview.renderer.render(characterPreview.scene, characterPreview.camera);
+      }
+      
+      animate();
+    }
+    
+    function createVoxelCharacter() {
+      // Clear existing character
+      if (characterPreview.character) {
+        characterPreview.scene.remove(characterPreview.character);
+      }
+      
+      const character = new THREE.Group();
+      const cubeSize = 0.5;
+      
+      // Get scale for body type
+      let bodyScale = { x: 1, y: 1, z: 1 };
+      switch (characterConfig.style.bodyType) {
+        case 'slim':
+          bodyScale = { x: 0.8, y: 1, z: 0.8 };
+          break;
+        case 'wide':
+          bodyScale = { x: 1.2, y: 1, z: 1.2 };
+          break;
+        case 'short':
+          bodyScale = { x: 1, y: 0.8, z: 1 };
+          break;
+      }
+      
+      // Head
+      const headMaterial = new THREE.MeshLambertMaterial({ color: characterConfig.colors.head });
+      const headGeometry = new THREE.BoxGeometry(cubeSize * 1.2, cubeSize * 1.2, cubeSize * 1.2);
+      const head = new THREE.Mesh(headGeometry, headMaterial);
+      head.position.y = cubeSize * 3.5;
+      character.add(head);
+      
+      // Eyes
+      const eyeMaterial = new THREE.MeshLambertMaterial({ color: characterConfig.colors.eye });
+      const eyeGeometry = new THREE.BoxGeometry(cubeSize * 0.2, cubeSize * 0.2, cubeSize * 0.1);
+      
+      const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+      leftEye.position.set(-cubeSize * 0.3, cubeSize * 3.6, cubeSize * 0.6);
+      character.add(leftEye);
+      
+      const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+      rightEye.position.set(cubeSize * 0.3, cubeSize * 3.6, cubeSize * 0.6);
+      character.add(rightEye);
+      
+      // Body
+      const bodyMaterial = new THREE.MeshLambertMaterial({ color: characterConfig.colors.body });
+      const bodyGeometry = new THREE.BoxGeometry(
+        cubeSize * bodyScale.x * 1.4, 
+        cubeSize * bodyScale.y * 2, 
+        cubeSize * bodyScale.z * 0.8
+      );
+      const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+      body.position.y = cubeSize * 2;
+      character.add(body);
+      
+      // Arms
+      const armMaterial = new THREE.MeshLambertMaterial({ color: characterConfig.colors.arm });
+      const armGeometry = new THREE.BoxGeometry(
+        cubeSize * 0.5, 
+        cubeSize * bodyScale.y * 1.5, 
+        cubeSize * 0.5
+      );
+      
+      const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+      leftArm.position.set(-cubeSize * bodyScale.x * 1, cubeSize * 2, 0);
+      character.add(leftArm);
+      
+      const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+      rightArm.position.set(cubeSize * bodyScale.x * 1, cubeSize * 2, 0);
+      character.add(rightArm);
+      
+      // Legs
+      const legMaterial = new THREE.MeshLambertMaterial({ color: characterConfig.colors.leg });
+      const legGeometry = new THREE.BoxGeometry(
+        cubeSize * 0.6, 
+        cubeSize * bodyScale.y * 1.5, 
+        cubeSize * 0.6
+      );
+      
+      const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
+      leftLeg.position.set(-cubeSize * 0.4, cubeSize * 0.5, 0);
+      character.add(leftLeg);
+      
+      const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
+      rightLeg.position.set(cubeSize * 0.4, cubeSize * 0.5, 0);
+      character.add(rightLeg);
+      
+      // Hair
+      if (characterConfig.style.hairStyle !== 'none') {
+        const hairMaterial = new THREE.MeshLambertMaterial({ color: characterConfig.colors.hair });
+        
+        switch (characterConfig.style.hairStyle) {
+          case 'short':
+            const shortHairGeometry = new THREE.BoxGeometry(cubeSize * 1.2, cubeSize * 0.3, cubeSize * 1.2);
+            const shortHair = new THREE.Mesh(shortHairGeometry, hairMaterial);
+            shortHair.position.y = cubeSize * 4.2;
+            character.add(shortHair);
+            break;
+            
+          case 'long':
+            const longHairGeometry = new THREE.BoxGeometry(cubeSize * 1.2, cubeSize * 0.3, cubeSize * 1.2);
+            const longHair = new THREE.Mesh(longHairGeometry, hairMaterial);
+            longHair.position.y = cubeSize * 4.2;
+            character.add(longHair);
+            
+            const backHairGeometry = new THREE.BoxGeometry(cubeSize * 1, cubeSize * 1.5, cubeSize * 0.3);
+            const backHair = new THREE.Mesh(backHairGeometry, hairMaterial);
+            backHair.position.set(0, cubeSize * 3.3, -cubeSize * 0.6);
+            character.add(backHair);
+            break;
+            
+          case 'spike':
+            for (let i = -1; i <= 1; i += 0.5) {
+              for (let j = -1; j <= 1; j += 0.5) {
+                if (Math.random() > 0.3) {
+                  const spikeGeometry = new THREE.BoxGeometry(cubeSize * 0.2, cubeSize * 0.3, cubeSize * 0.2);
+                  const spike = new THREE.Mesh(spikeGeometry, hairMaterial);
+                  spike.position.set(
+                    i * cubeSize * 0.4,
+                    cubeSize * 4.3,
+                    j * cubeSize * 0.4
+                  );
+                  character.add(spike);
+                }
+              }
+            }
+            break;
+            
+          case 'mohawk':
+            for (let i = -2; i <= 2; i++) {
+              const mohawkPieceGeometry = new THREE.BoxGeometry(cubeSize * 0.2, cubeSize * (0.3 + Math.random() * 0.2), cubeSize * 0.2);
+              const mohawkPiece = new THREE.Mesh(mohawkPieceGeometry, hairMaterial);
+              mohawkPiece.position.set(
+                0,
+                cubeSize * 4.3 + Math.random() * 0.1,
+                i * cubeSize * 0.2
+              );
+              character.add(mohawkPiece);
+            }
+            break;
+        }
+      }
+      
+      // Accessories
+      if (characterConfig.style.accessory !== 'none') {
+        const accessoryMaterial = new THREE.MeshLambertMaterial({ color: characterConfig.colors.accessory });
+        
+        switch (characterConfig.style.accessory) {
+          case 'hat':
+            const hatBaseGeometry = new THREE.BoxGeometry(cubeSize * 1.4, cubeSize * 0.2, cubeSize * 1.4);
+            const hatBase = new THREE.Mesh(hatBaseGeometry, accessoryMaterial);
+            hatBase.position.y = cubeSize * 4.3;
+            character.add(hatBase);
+            
+            const hatTopGeometry = new THREE.BoxGeometry(cubeSize * 0.8, cubeSize * 0.4, cubeSize * 0.8);
+            const hatTop = new THREE.Mesh(hatTopGeometry, accessoryMaterial);
+            hatTop.position.y = cubeSize * 4.6;
+            character.add(hatTop);
+            break;
+            
+          case 'crown':
+            const crownBaseGeometry = new THREE.BoxGeometry(cubeSize * 1.2, cubeSize * 0.2, cubeSize * 1.2);
+            const crownBase = new THREE.Mesh(crownBaseGeometry, accessoryMaterial);
+            crownBase.position.y = cubeSize * 4.3;
+            character.add(crownBase);
+            
+            for (let i = -1; i <= 1; i++) {
+              for (let j = -1; j <= 1; j++) {
+                if (Math.abs(i) === 1 || Math.abs(j) === 1) {
+                  const crownSpikeGeometry = new THREE.BoxGeometry(cubeSize * 0.2, cubeSize * 0.3, cubeSize * 0.2);
+                  const crownSpike = new THREE.Mesh(crownSpikeGeometry, accessoryMaterial);
+                  crownSpike.position.set(
+                    i * cubeSize * 0.5,
+                    cubeSize * 4.5,
+                    j * cubeSize * 0.5
+                  );
+                  character.add(crownSpike);
+                }
+              }
+            }
+            break;
+            
+          case 'sword':
+            const swordHandleGeometry = new THREE.BoxGeometry(cubeSize * 0.2, cubeSize * 0.6, cubeSize * 0.2);
+            const swordHandle = new THREE.Mesh(swordHandleGeometry, accessoryMaterial);
+            swordHandle.position.set(
+              cubeSize * bodyScale.x * 1.2,
+              cubeSize * 1.8,
+              0
+            );
+            character.add(swordHandle);
+            
+            const swordBladeGeometry = new THREE.BoxGeometry(cubeSize * 0.2, cubeSize * 1.2, cubeSize * 0.1);
+            const swordBlade = new THREE.Mesh(swordBladeGeometry, new THREE.MeshLambertMaterial({ color: 0xCCCCCC }));
+            swordBlade.position.set(
+              cubeSize * bodyScale.x * 1.2,
+              cubeSize * 2.7,
+              0
+            );
+            character.add(swordBlade);
+            break;
+            
+          case 'shield':
+            const shieldGeometry = new THREE.BoxGeometry(cubeSize * 0.2, cubeSize * 1, cubeSize * 0.8);
+            const shield = new THREE.Mesh(shieldGeometry, accessoryMaterial);
+            shield.position.set(
+              -cubeSize * bodyScale.x * 1.2,
+              cubeSize * 2,
+              0
+            );
+            character.add(shield);
+            break;
+        }
+      }
+      
+      characterPreview.character = character;
+      characterPreview.scene.add(character);
+    }
+
+    // UI Event Handlers
+    function setupCharacterCreatorUI() {
+      // Color pickers
+      document.querySelectorAll('.color-option').forEach(option => {
+        option.addEventListener('click', () => {
+          const part = option.parentElement.dataset.part;
+          const color = option.dataset.color;
+          
+          // Update selection UI
+          option.parentElement.querySelectorAll('.color-option').forEach(opt => {
+            opt.classList.remove('selected');
+          });
+          option.classList.add('selected');
+          
+          // Update config
+          characterConfig.colors[part] = color;
+          
+          // Update preview
+          if (part === 'head') {
+            characterConfig.colors.arm = color; // Make arms match head
+          }
+          
+          createVoxelCharacter();
+        });
+      });
+      
+      // Game version selector
+      document.getElementById('game-version').addEventListener('change', (e) => {
+        gameVersion = parseInt(e.target.value, 10);
+        console.log(`Game version changed to ${gameVersion}`);
+        
+        // Update the description based on the selected version
+        let versionDescription = "";
+        switch (gameVersion) {
+          case 1:
+            versionDescription = "Fixed maps with predefined layouts";
+            break;
+          case 2:
+            versionDescription = "Depth-First Search maze generation";
+            break;
+          case 3:
+            versionDescription = "Kruskal's algorithm maze generation";
+            break;
+          case 4:
+            versionDescription = "Prim's algorithm maze generation";
+            break;
+          case 5:
+            versionDescription = "Recursive Division maze generation";
+            break;
+          case 6:
+            versionDescription = "Binary Tree maze generation";
+            break;
+        }
+        
+        // Show a dialog with the description
+        showDialog(`Selected: ${versionDescription}. Click START ADVENTURE to begin!`);
+        
+        // If the game is already started, reset it to apply the new maze type
+        if (game.gameStarted) {
+          resetGame();
+        }
+      });
+      
+      // Style dropdowns
+      document.getElementById('body-type').addEventListener('change', (e) => {
+        characterConfig.style.bodyType = e.target.value;
+        createVoxelCharacter();
+      });
+      
+      document.getElementById('hair-style').addEventListener('change', (e) => {
+        characterConfig.style.hairStyle = e.target.value;
+        createVoxelCharacter();
+      });
+      
+      document.getElementById('accessory').addEventListener('change', (e) => {
+        characterConfig.style.accessory = e.target.value;
+        createVoxelCharacter();
+      });
+      
+      // Presets
+      document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const preset = btn.dataset.preset;
+          
+          if (preset === 'random') {
+            // Generate random character
+            const randomHexColor = () => '#' + Math.floor(Math.random()*16777215).toString(16);
+            
+            characterConfig.colors.head = randomHexColor();
+            characterConfig.colors.body = randomHexColor();
+            characterConfig.colors.arm = characterConfig.colors.head; // Match arms to head
+            characterConfig.colors.leg = randomHexColor();
+            characterConfig.colors.hair = randomHexColor();
+            
+            const bodyTypes = ['normal', 'slim', 'wide', 'short'];
+            const hairStyles = ['none', 'short', 'long', 'spike', 'mohawk'];
+            const accessories = ['none', 'hat', 'crown', 'sword', 'shield'];
+            
+            characterConfig.style.bodyType = bodyTypes[Math.floor(Math.random() * bodyTypes.length)];
+            characterConfig.style.hairStyle = hairStyles[Math.floor(Math.random() * hairStyles.length)];
+            characterConfig.style.accessory = accessories[Math.floor(Math.random() * accessories.length)];
+            
+            // Update UI
+            updateCreatorUI();
+          } else if (presets[preset]) {
+            // Apply preset
+            Object.keys(presets[preset].colors).forEach(key => {
+              characterConfig.colors[key] = presets[preset].colors[key];
+            });
+            
+            Object.keys(presets[preset].style).forEach(key => {
+              characterConfig.style[key] = presets[preset].style[key];
+            });
+            
+            // Update UI
+            updateCreatorUI();
+          }
+          
+          createVoxelCharacter();
+        });
+      });
+      
+      // Panel toggle
+      document.querySelector('.toggle-panel').addEventListener('click', () => {
+        const panel = document.querySelector('.creator-panel');
+        const toggleBtn = document.querySelector('.toggle-panel');
+        
+        panel.classList.toggle('hidden');
+        toggleBtn.classList.toggle('hidden');
+        toggleBtn.textContent = panel.classList.contains('hidden') ? '◀' : '▶';
+      });
+      
+      // Start game button
+      document.getElementById('start-game').addEventListener('click', () => {
+        startGame();
+      });
+    }
+    
+    function updateCreatorUI() {
+      // Update color pickers
+      Object.keys(characterConfig.colors).forEach(part => {
+        const colorPicker = document.querySelector(`.color-picker[data-part="${part}"]`);
+        if (colorPicker) {
+          const options = colorPicker.querySelectorAll('.color-option');
+          options.forEach(option => {
+            option.classList.remove('selected');
+            if (option.dataset.color === characterConfig.colors[part]) {
+              option.classList.add('selected');
+            }
+          });
+        }
+      });
+      
+      // Update dropdowns
+      document.getElementById('body-type').value = characterConfig.style.bodyType;
+      document.getElementById('hair-style').value = characterConfig.style.hairStyle;
+      document.getElementById('accessory').value = characterConfig.style.accessory;
+    }
+
+    // Game Logic
+    const game = {
+      scene: null,
+      camera: null,
+      renderer: null,
+      player: null,
+      playerModel: null,
+      controls: {
+        up: false,
+        down: false,
+        left: false,
+        right: false,
+        action: false
+      },
+      entities: [],
+      map: [],
+      level: 1,
+      coins: 0,
+      health: 3,
+      hasKey: false,
+      gameStarted: false,
+      gamePaused: false
+    };
+
+    function initGame() {
+      // Setup the scene
+      game.scene = new THREE.Scene();
+      game.scene.background = new THREE.Color(0x55acee);
+      
+      // Setup the camera - adjusted for better map view
+      game.camera = new THREE.PerspectiveCamera(
+        60, 
+        document.querySelector('.game-container').clientWidth / document.querySelector('.game-container').clientHeight,
+        0.1,
+        1000
+      );
+      
+      // Camera positioning will be updated later in createLevel
+      
+      // Setup renderer
+      game.renderer = new THREE.WebGLRenderer({ antialias: true });
+      game.renderer.setSize(
+        document.querySelector('.game-container').clientWidth,
+        document.querySelector('.game-container').clientHeight
+      );
+      
+      // Create a container for the game canvas if it doesn't exist
+      if (!document.getElementById('game-canvas').firstChild) {
+        document.getElementById('game-canvas').appendChild(game.renderer.domElement);
+      }
+      
+      // Add lights
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      game.scene.add(ambientLight);
+      
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(10, 10, 10);
+      game.scene.add(directionalLight);
+      
+      // Handle window resize
+      window.addEventListener('resize', () => {
+        const width = document.querySelector('.game-container').clientWidth;
+        const height = document.querySelector('.game-container').clientHeight;
+        
+        game.renderer.setSize(width, height);
+        game.camera.aspect = width / height;
+        game.camera.updateProjectionMatrix();
+      });
+      
+      // Control event listeners
+      window.addEventListener('keydown', (e) => {
+        switch (e.key.toLowerCase()) {
+          case 'w': case 'arrowup': game.controls.up = true; break;
+          case 'a': case 'arrowleft': game.controls.left = true; break;
+          case 's': case 'arrowdown': game.controls.down = true; break;
+          case 'd': case 'arrowright': game.controls.right = true; break;
+          case ' ': game.controls.action = true; break;
+          case 'p': 
+            if (game.gameStarted && !game.gamePaused) {
+              pauseGame();
+            } else if (game.gamePaused) {
+              resumeGame();
+            }
+            break;
+        }
+      });
+      
+      window.addEventListener('keyup', (e) => {
+        switch (e.key.toLowerCase()) {
+          case 'w': case 'arrowup': game.controls.up = false; break;
+          case 'a': case 'arrowleft': game.controls.left = false; break;
+          case 's': case 'arrowdown': game.controls.down = false; break;
+          case 'd': case 'arrowright': game.controls.right = false; break;
+          case ' ': game.controls.action = false; break;
+        }
+      });
+      
+      // Intro screen click handler
+      document.getElementById('intro-screen').addEventListener('click', () => {
+        document.getElementById('intro-screen').style.display = 'none';
+      });
+      
+      // Restart button
+      document.getElementById('restart-btn').addEventListener('click', () => {
+        document.querySelector('.game-over').style.display = 'none';
+        startGame();
+      });
+      
+      // Add camera control instructions to the control info panel
+      const controlsInfo = document.querySelector('.controls-info');
+      const cameraControlsText = document.createElement('p');
+      cameraControlsText.textContent = 'Right-click drag - Rotate Camera';
+      const zoomControlsText = document.createElement('p');
+      zoomControlsText.textContent = 'Mouse Wheel - Zoom Camera';
+      controlsInfo.appendChild(cameraControlsText);
+      controlsInfo.appendChild(zoomControlsText);
+    }
+
+    function createPlayerModel() {
+      // Create player model based on character creator
+      const player = new THREE.Group();
+      const cubeSize = 0.5;
+      
+      // Get scale for body type
+      let bodyScale = { x: 1, y: 1, z: 1 };
+      switch (characterConfig.style.bodyType) {
+        case 'slim':
+          bodyScale = { x: 0.8, y: 1, z: 0.8 };
+          break;
+        case 'wide':
+          bodyScale = { x: 1.2, y: 1, z: 1.2 };
+          break;
+        case 'short':
+          bodyScale = { x: 1, y: 0.8, z: 1 };
+          break;
+      }
+      
+      // Head
+      const headMaterial = new THREE.MeshLambertMaterial({ color: characterConfig.colors.head });
+      const headGeometry = new THREE.BoxGeometry(cubeSize * 1.2, cubeSize * 1.2, cubeSize * 1.2);
+      const head = new THREE.Mesh(headGeometry, headMaterial);
+      head.position.y = cubeSize * 3.5;
+      player.add(head);
+      
+      // Eyes
+      const eyeMaterial = new THREE.MeshLambertMaterial({ color: characterConfig.colors.eye });
+      const eyeGeometry = new THREE.BoxGeometry(cubeSize * 0.2, cubeSize * 0.2, cubeSize * 0.1);
+      
+      const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+      leftEye.position.set(-cubeSize * 0.3, cubeSize * 3.6, cubeSize * 0.6);
+      player.add(leftEye);
+      
+      const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+      rightEye.position.set(cubeSize * 0.3, cubeSize * 3.6, cubeSize * 0.6);
+      player.add(rightEye);
+      
+      // Body
+      const bodyMaterial = new THREE.MeshLambertMaterial({ color: characterConfig.colors.body });
+      const bodyGeometry = new THREE.BoxGeometry(
+        cubeSize * bodyScale.x * 1.4, 
+        cubeSize * bodyScale.y * 2, 
+        cubeSize * bodyScale.z * 0.8
+      );
+      const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+      body.position.y = cubeSize * 2;
+      player.add(body);
+      
+      // Arms
+      const armMaterial = new THREE.MeshLambertMaterial({ color: characterConfig.colors.arm });
+      const armGeometry = new THREE.BoxGeometry(
+        cubeSize * 0.5, 
+        cubeSize * bodyScale.y * 1.5, 
+        cubeSize * 0.5
+      );
+      
+      const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+      leftArm.position.set(-cubeSize * bodyScale.x * 1, cubeSize * 2, 0);
+      player.add(leftArm);
+      
+      const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+      rightArm.position.set(cubeSize * bodyScale.x * 1, cubeSize * 2, 0);
+      player.add(rightArm);
+      
+      // Legs
+      const legMaterial = new THREE.MeshLambertMaterial({ color: characterConfig.colors.leg });
+      const legGeometry = new THREE.BoxGeometry(
+        cubeSize * 0.6, 
+        cubeSize * bodyScale.y * 1.5, 
+        cubeSize * 0.6
+      );
+      
+      const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
+      leftLeg.position.set(-cubeSize * 0.4, cubeSize * 0.5, 0);
+      player.add(leftLeg);
+      
+      const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
+      rightLeg.position.set(cubeSize * 0.4, cubeSize * 0.5, 0);
+      player.add(rightLeg);
+      
+      // Add accessories based on character config
+      if (characterConfig.style.hairStyle !== 'none' || characterConfig.style.accessory !== 'none') {
+        // Hair
+        if (characterConfig.style.hairStyle !== 'none') {
+          const hairMaterial = new THREE.MeshLambertMaterial({ color: characterConfig.colors.hair });
+          
+          switch (characterConfig.style.hairStyle) {
+            case 'short':
+              const shortHairGeometry = new THREE.BoxGeometry(cubeSize * 1.2, cubeSize * 0.3, cubeSize * 1.2);
+              const shortHair = new THREE.Mesh(shortHairGeometry, hairMaterial);
+              shortHair.position.y = cubeSize * 4.2;
+              player.add(shortHair);
+              break;
+              
+            case 'long':
+              const longHairGeometry = new THREE.BoxGeometry(cubeSize * 1.2, cubeSize * 0.3, cubeSize * 1.2);
+              const longHair = new THREE.Mesh(longHairGeometry, hairMaterial);
+              longHair.position.y = cubeSize * 4.2;
+              player.add(longHair);
+              
+              const backHairGeometry = new THREE.BoxGeometry(cubeSize * 1, cubeSize * 1.5, cubeSize * 0.3);
+              const backHair = new THREE.Mesh(backHairGeometry, hairMaterial);
+              backHair.position.set(0, cubeSize * 3.3, -cubeSize * 0.6);
+              player.add(backHair);
+              break;
+              
+            case 'spike':
+            case 'mohawk':
+              const topHairGeometry = new THREE.BoxGeometry(cubeSize * 1.2, cubeSize * 0.6, cubeSize * 1.2);
+              const topHair = new THREE.Mesh(topHairGeometry, hairMaterial);
+              topHair.position.y = cubeSize * 4.3;
+              player.add(topHair);
+              break;
+          }
+        }
+        
+        // Accessories
+        if (characterConfig.style.accessory !== 'none') {
+          const accessoryMaterial = new THREE.MeshLambertMaterial({ color: characterConfig.colors.accessory });
+          
+          switch (characterConfig.style.accessory) {
+            case 'hat':
+            case 'crown':
+              const hatGeometry = new THREE.BoxGeometry(cubeSize * 1.4, cubeSize * 0.5, cubeSize * 1.4);
+              const hat = new THREE.Mesh(hatGeometry, accessoryMaterial);
+              hat.position.y = cubeSize * 4.3;
+              player.add(hat);
+              break;
+              
+            case 'sword':
+              const swordGeometry = new THREE.BoxGeometry(cubeSize * 0.2, cubeSize * 1.5, cubeSize * 0.2);
+              const sword = new THREE.Mesh(swordGeometry, accessoryMaterial);
+              sword.position.set(
+                cubeSize * bodyScale.x * 1.2,
+                cubeSize * 2,
+                0
+              );
+              player.add(sword);
+              break;
+              
+            case 'shield':
+              const shieldGeometry = new THREE.BoxGeometry(cubeSize * 0.2, cubeSize * 1, cubeSize * 0.8);
+              const shield = new THREE.Mesh(shieldGeometry, accessoryMaterial);
+              shield.position.set(
+                -cubeSize * bodyScale.x * 1.2,
+                cubeSize * 2,
+                0
+              );
+              player.add(shield);
+              break;
+          }
+        }
+      }
+      
+      return player;
+    }
+
+    function createLevel(level) {
+      // Clear existing level
+      game.entities.forEach(entity => {
+        game.scene.remove(entity.mesh);
+      });
+      game.entities = [];
+      
+      // Debug logging
+      console.log(`Creating level ${level} with game version ${gameVersion}`);
+      
+      // Select level map or generate one
+      let currentMap;
+      
+      if (gameVersion === 1) {
+        // Use fixed maps
+        currentMap = level <= fixedLevelMaps.length ? fixedLevelMaps[level - 1] : fixedLevelMaps[0];
+        console.log("Using fixed map:", currentMap.length, "rows");
+      } else {
+        // Generate procedural map based on selected algorithm
+        const mazeWidth = 41;  // Must be odd
+        const mazeHeight = 21; // Must be odd
+        console.log(`Generating maze with algorithm version ${gameVersion} (${getMazeAlgorithmName(gameVersion)})`);
+        currentMap = generateMaze(mazeWidth, mazeHeight, gameVersion);
+        console.log("Generated procedural maze:", currentMap.length, "rows");
+        
+        // Log a sample of the maze for debugging
+        console.log("Maze sample (first 5 rows):");
+        for (let i = 0; i < Math.min(5, currentMap.length); i++) {
+          console.log(currentMap[i]);
+        }
+      }
+      
+      game.map = currentMap;
+      
+      const tileSize = 1;
+      const halfMapWidth = currentMap[0].length / 2;
+      const halfMapHeight = currentMap.length / 2;
+      
+      // Floor - grassy ground
+      const floorGeometry = new THREE.PlaneGeometry(
+        currentMap[0].length * tileSize,
+        currentMap.length * tileSize
+      );
+      const floorMaterial = new THREE.MeshLambertMaterial({ 
+        color: 0x6ab04c, 
+        side: THREE.DoubleSide 
+      });
+      const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+      floor.rotation.x = Math.PI / 2;
+      floor.position.set(
+        halfMapWidth - 0.5,
+        0,
+        halfMapHeight - 0.5
+      );
+      game.scene.add(floor);
+      
+      // Set the initial camera position to view the whole map
+      cameraControls.mapCenter = {
+        x: halfMapWidth - 0.5,
+        z: halfMapHeight - 0.5
+      };
+      
+      // Player starting position
+      let playerStartX = 1;
+      let playerStartZ = 1;
+      
+      // Create game elements
+      for (let z = 0; z < currentMap.length; z++) {
+        for (let x = 0; x < currentMap[z].length; x++) {
+          const tile = currentMap[z][x];
+          
+          switch (tile) {
+            case 'W': // Wall
+              const wallGeometry = new THREE.BoxGeometry(tileSize, tileSize * 2, tileSize);
+              const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x3867d6 });
+              const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+              wall.position.set(x, 1, z);
+              game.scene.add(wall);
+              
+              game.entities.push({
+                type: 'wall',
+                position: { x, z },
+                mesh: wall
+              });
+              break;
+              
+            case 'P': // Player start
+              playerStartX = x;
+              playerStartZ = z;
+              break;
+              
+            case 'C': // Coin
+              const coinGeometry = new THREE.CylinderGeometry(tileSize * 0.25, tileSize * 0.25, tileSize * 0.05, 16);
+              const coinMaterial = new THREE.MeshLambertMaterial({ color: 0xf9ca24 });
+              const coin = new THREE.Mesh(coinGeometry, coinMaterial);
+              coin.rotation.x = Math.PI / 2;
+              coin.position.set(x, 0.5, z);
+              game.scene.add(coin);
+              
+              game.entities.push({
+                type: 'coin',
+                position: { x, z },
+                mesh: coin,
+                rotationSpeed: 0.03 + Math.random() * 0.02, // Random rotation speed
+                floatOffset: Math.random() * Math.PI * 2, // Random offset for floating animation
+                initialY: 0.5
+              });
+              break;
+              
+            case 'M': // Enemy/Monster
+              const enemyGeometry = new THREE.BoxGeometry(tileSize * 0.7, tileSize * 1.2, tileSize * 0.7);
+              const enemyMaterial = new THREE.MeshLambertMaterial({ color: 0xe74c3c });
+              const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+              enemy.position.set(x, 0.6, z);
+              game.scene.add(enemy);
+              
+              // Add eyes to the enemy
+              const enemyEyeGeometry = new THREE.BoxGeometry(tileSize * 0.15, tileSize * 0.15, tileSize * 0.1);
+              const enemyEyeMaterial = new THREE.MeshLambertMaterial({ color: 0xecf0f1 });
+              
+              const leftEye = new THREE.Mesh(enemyEyeGeometry, enemyEyeMaterial);
+              leftEye.position.set(-tileSize * 0.2, tileSize * 0.2, tileSize * 0.35);
+              enemy.add(leftEye);
+              
+              const rightEye = new THREE.Mesh(enemyEyeGeometry, enemyEyeMaterial);
+              rightEye.position.set(tileSize * 0.2, tileSize * 0.2, tileSize * 0.35);
+              enemy.add(rightEye);
+              
+              game.entities.push({
+                type: 'enemy',
+                position: { x, z },
+                mesh: enemy,
+                direction: Math.floor(Math.random() * 4), // Random initial direction
+                moveCounter: 0,
+                moveInterval: 60 + Math.floor(Math.random() * 60) // Random movement interval
+              });
+              break;
+              
+            case 'K': // Key
+              const keyGeometry = new THREE.BoxGeometry(tileSize * 0.4, tileSize * 0.1, tileSize * 0.6);
+              const keyMaterial = new THREE.MeshLambertMaterial({ color: 0xeb3b5a });
+              const key = new THREE.Mesh(keyGeometry, keyMaterial);
+              key.position.set(x, 0.5, z);
+              game.scene.add(key);
+              
+              game.entities.push({
+                type: 'key',
+                position: { x, z },
+                mesh: key,
+                rotationSpeed: 0.02,
+                floatOffset: Math.random() * Math.PI * 2,
+                initialY: 0.5
+              });
+              break;
+              
+            case 'E': // Exit
+              const exitGeometry = new THREE.BoxGeometry(tileSize * 0.8, tileSize * 1.5, tileSize * 0.8);
+              const exitMaterial = new THREE.MeshLambertMaterial({ color: 0xe84393, transparent: true, opacity: 0.7 });
+              const exit = new THREE.Mesh(exitGeometry, exitMaterial);
+              exit.position.set(x, 0.75, z);
+              game.scene.add(exit);
+              
+              game.entities.push({
+                type: 'exit',
+                position: { x, z },
+                mesh: exit,
+                locked: true
+              });
+              break;
+          }
+        }
+      }
+      
+      // Create player model and position at start
+      game.playerModel = createPlayerModel();
+      game.playerModel.position.set(playerStartX, 0, playerStartZ);
+      game.scene.add(game.playerModel);
+      
+      game.player = {
+        position: { x: playerStartX, z: playerStartZ },
+        direction: 0, // 0: down, 1: left, 2: up, 3: right
+        animationState: 0,
+        animationTime: 0
+      };
+      
+      // Position camera to follow player - improved camera angle
+      game.camera.position.set(
+        playerStartX, 
+        15, // Higher up to see more of the map
+        playerStartZ + 10 // Look from behind and above the player
+      );
+      game.camera.lookAt(playerStartX, 0, playerStartZ);
+      
+      updateCameraPosition();
+    }
+
+    // Camera controls for adjusting view angles
+    let cameraControls = {
+      orbitEnabled: false,
+      // Starting with a higher orbit distance to see the whole map
+      orbitDistance: 40,
+      orbitAngleHorizontal: Math.PI / 4, // 45 degrees
+      orbitAngleVertical: Math.PI / 4,   // 45 degrees - higher angle to see more of the map
+      mouseSensitivity: 0.005,
+      zoomSensitivity: 0.1,
+      minDistance: 10,
+      maxDistance: 100, // Higher max to allow zooming out to see entire map
+      minVerticalAngle: 0.1,
+      maxVerticalAngle: Math.PI / 2 - 0.1,
+      lastMousePosition: { x: 0, y: 0 },
+      // Center of the map for rotation reference
+      mapCenter: { x: 0, z: 0 }
+    };
+
+    function initCameraControls() {
+      // Wait until game-canvas exists before attaching events
+      const gameCanvasElement = document.getElementById('game-canvas');
+      if (!gameCanvasElement) {
+        console.error("Game canvas element not found, camera controls not initialized");
+        return;
+      }
+      
+      // Mouse wheel for zooming
+      gameCanvasElement.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        cameraControls.orbitDistance += (e.deltaY * cameraControls.zoomSensitivity);
+        cameraControls.orbitDistance = Math.max(cameraControls.minDistance, 
+                                        Math.min(cameraControls.maxDistance, 
+                                        cameraControls.orbitDistance));
+        updateCameraPosition();
+      });
+
+      // Right-click drag for orbit
+      gameCanvasElement.addEventListener('mousedown', (e) => {
+        if (e.button === 2) { // Right mouse button
+          e.preventDefault();
+          cameraControls.orbitEnabled = true;
+          cameraControls.lastMousePosition.x = e.clientX;
+          cameraControls.lastMousePosition.y = e.clientY;
+        }
+      });
+
+      // Mouse move for orbit if right button is pressed
+      document.addEventListener('mousemove', (e) => {
+        if (cameraControls.orbitEnabled) {
+          const deltaX = e.clientX - cameraControls.lastMousePosition.x;
+          const deltaY = e.clientY - cameraControls.lastMousePosition.y;
+          
+          cameraControls.orbitAngleHorizontal += deltaX * cameraControls.mouseSensitivity;
+          cameraControls.orbitAngleVertical += deltaY * cameraControls.mouseSensitivity;
+          
+          // Clamp vertical angle to avoid flipping
+          cameraControls.orbitAngleVertical = Math.max(cameraControls.minVerticalAngle,
+                                             Math.min(cameraControls.maxVerticalAngle, 
+                                             cameraControls.orbitAngleVertical));
+          
+          cameraControls.lastMousePosition.x = e.clientX;
+          cameraControls.lastMousePosition.y = e.clientY;
+          
+          updateCameraPosition();
+        }
+      });
+
+      // Mouse up to stop orbiting
+      document.addEventListener('mouseup', (e) => {
+        if (e.button === 2) {
+          cameraControls.orbitEnabled = false;
+        }
+      });
+
+      // Prevent context menu on right click
+      gameCanvasElement.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+      });
+      
+      // Set initial camera position
+      updateCameraPosition();
+    }
+
+    function updateCameraPosition() {
+      // Safety check to prevent errors
+      if (!game.camera) {
+        return;
+      }
+      
+      // Calculate center of the map if we have a map
+      if (game.map && game.map.length > 0) {
+        cameraControls.mapCenter = {
+          x: game.map[0].length / 2,
+          z: game.map.length / 2
+        };
+      }
+      
+      // Use map center as orbit target
+      const targetX = cameraControls.mapCenter.x;
+      const targetZ = cameraControls.mapCenter.z;
+      
+      // Calculate camera position based on orbit parameters
+      const horizontalRadius = cameraControls.orbitDistance * Math.cos(cameraControls.orbitAngleVertical);
+      const cameraTargetX = targetX + horizontalRadius * Math.sin(cameraControls.orbitAngleHorizontal);
+      const cameraTargetY = cameraControls.orbitDistance * Math.sin(cameraControls.orbitAngleVertical);
+      const cameraTargetZ = targetZ + horizontalRadius * Math.cos(cameraControls.orbitAngleHorizontal);
+      
+      // Set camera position directly for map view
+      game.camera.position.x = cameraTargetX;
+      game.camera.position.y = cameraTargetY;
+      game.camera.position.z = cameraTargetZ;
+      
+      // Look at the map center
+      game.camera.lookAt(targetX, 0, targetZ);
+    }
+    
+    function movePlayer() {
+      if (!game.gameStarted || game.gamePaused) return;
+      
+      let newX = game.player.position.x;
+      let newZ = game.player.position.z;
+      let direction = game.player.direction;
+      
+      if (game.controls.up) {
+        newZ--;
+        direction = 2;
+      } else if (game.controls.down) {
+        newZ++;
+        direction = 0;
+      } else if (game.controls.left) {
+        newX--;
+        direction = 1;
+      } else if (game.controls.right) {
+        newX++;
+        direction = 3;
+      }
+      
+      // Update direction even if not moving
+      game.player.direction = direction;
+      
+      // Update model rotation based on direction
+      game.playerModel.rotation.y = Math.PI / 2 * direction;
+      
+      // Check if movement is valid
+      if (newX !== game.player.position.x || newZ !== game.player.position.z) {
+        // Check collision with walls
+        let canMove = true;
+        game.entities.forEach(entity => {
+          if (entity.type === 'wall' && 
+              entity.position.x === newX && 
+              entity.position.z === newZ) {
+            canMove = false;
+          }
+        });
+        
+        if (canMove) {
+          // Move the player
+          game.player.position.x = newX;
+          game.player.position.z = newZ;
+          game.playerModel.position.x = newX;
+          game.playerModel.position.z = newZ;
+          
+          // Update animation state
+          game.player.animationState = (game.player.animationState + 1) % 20;
+          
+          // Update leg animation
+          const leftLeg = game.playerModel.children[6];
+          const rightLeg = game.playerModel.children[7];
+          
+          if (leftLeg && rightLeg) {
+            const phase = Math.sin(game.player.animationState * 0.5);
+            leftLeg.rotation.x = phase * 0.5;
+            rightLeg.rotation.x = -phase * 0.5;
+          }
+          
+          // Update camera
+          updateCameraPosition();
+          
+          // Check collisions with items and enemies
+          checkCollisions();
+        }
+      }
+    }
+    
+    function checkCollisions() {
+      // Check for enemy collisions
+      for (let i = 0; i < game.entities.length; i++) {
+        const entity = game.entities[i];
+        
+        if (entity.position.x === game.player.position.x && 
+            entity.position.z === game.player.position.z) {
+            
+          if (entity.type === 'enemy') {
+            handleEnemyCollision();
+            continue; // Skip to next entity after handling enemy collision
+          }
+            
+          switch (entity.type) {
+            case 'coin':
+              // Collect coin with sound effect
+              playSound('coin');
+              
+              // Update counter
+              game.coins++;
+              document.getElementById('coins').textContent = game.coins;
+              
+              // Remove from scene
+              game.scene.remove(entity.mesh);
+              game.entities.splice(i, 1);
+              i--;
+              break;
+              
+            case 'key':
+              // Collect key
+              game.hasKey = true;
+              playSound('key');
+              showDialog("You found the key! Now find the exit!");
+              
+              // Remove from scene
+              game.scene.remove(entity.mesh);
+              game.entities.splice(i, 1);
+              i--;
+              
+              // Update exit appearance
+              updateExitAppearance();
+              break;
+              
+            case 'exit':
+              if (game.hasKey) {
+                // Level complete
+                playSound('success');
+                
+                if (gameVersion === 1) {
+                  // Fixed maps version
+                  if (game.level < fixedLevelMaps.length) {
+                    game.level++;
+                    showDialog(`Level ${game.level - 1} complete! Moving to level ${game.level}...`);
+                    setTimeout(() => {
+                      game.hasKey = false;
+                      createLevel(game.level);
+                    }, 2000);
+                  } else {
+                    // Game complete
+                    showDialog("Congratulations! You completed all the fixed levels!");
+                    setTimeout(() => {
+                      endGame(true);
+                    }, 2000);
+                  }
+                } else {
+                  // Procedural maze version - generate a new maze with the same algorithm
+                  game.level++;
+                  showDialog(`Maze ${game.level - 1} complete! Generating new maze ${game.level} using ${getMazeAlgorithmName(gameVersion)}...`);
+                  setTimeout(() => {
+                    game.hasKey = false;
+                    createLevel(game.level);
+                  }, 2000);
+                }
+              } else {
+                showDialog("The exit is locked. Find the key first!");
+              }
+              break;
+          }
+        }
+      }
+    }
+
+    function playSound(type) {
+      // Simple audio feedback (can be expanded with actual sound files)
+      let frequency = 440;
+      let duration = 0.2;
+      
+      switch (type) {
+        case 'coin': frequency = 880; duration = 0.1; break;
+        case 'key': frequency = 660; duration = 0.3; break;
+        case 'success': frequency = 880; duration = 0.5; break;
+        case 'damage': frequency = 220; duration = 0.3; break;
+      }
+      
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      gainNode.gain.value = 0.1;
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.start();
+      
+      gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+      
+      setTimeout(() => {
+        oscillator.stop();
+      }, duration * 1000);
+    }
+    
+    function showDialog(message) {
+      const dialog = document.getElementById('dialog');
+      dialog.textContent = message;
+      dialog.style.display = 'block';
+      
+      setTimeout(() => {
+        dialog.style.display = 'none';
+      }, 3000);
+    }
+    
+    function updateGame() {
+      if (!game.gameStarted || game.gamePaused) return;
+      
+      // Animate entities
+      game.entities.forEach(entity => {
+        if (entity.type === 'coin' || entity.type === 'key') {
+          entity.mesh.rotation.y += entity.rotationSpeed;
+          entity.mesh.position.y = entity.initialY + Math.sin(Date.now() * 0.003 + entity.floatOffset) * 0.1;
+        } else if (entity.type === 'exit' && !entity.locked) {
+          // Make the exit portal pulse if unlocked
+          entity.mesh.scale.y = 1 + Math.sin(Date.now() * 0.005) * 0.1;
+        } else if (entity.type === 'enemy') {
+          // Handle enemy movement
+          entity.moveCounter++;
+          
+          if (entity.moveCounter >= entity.moveInterval) {
+            entity.moveCounter = 0;
+            
+            // Try to move in current direction first
+            let directions = [
+              { dx: 0, dz: 1 },  // down
+              { dx: -1, dz: 0 }, // left
+              { dx: 0, dz: -1 }, // up
+              { dx: 1, dz: 0 }   // right
+            ];
+            
+            // Start with current direction, then try others if blocked
+            let directionOrder = [
+              entity.direction,
+              (entity.direction + 1) % 4,
+              (entity.direction + 3) % 4,
+              (entity.direction + 2) % 4
+            ];
+            
+            let moved = false;
+            
+            for (let i = 0; i < directionOrder.length && !moved; i++) {
+              let dir = directionOrder[i];
+              let newX = entity.position.x + directions[dir].dx;
+              let newZ = entity.position.z + directions[dir].dz;
+              
+              // Check if the new position is valid (not a wall or other enemy)
+              let canMove = true;
+              
+              for (let j = 0; j < game.entities.length; j++) {
+                const otherEntity = game.entities[j];
+                if ((otherEntity.type === 'wall' || otherEntity.type === 'enemy') && 
+                    otherEntity.position.x === newX && 
+                    otherEntity.position.z === newZ) {
+                  canMove = false;
+                  break;
+                }
+              }
+              
+              if (canMove) {
+                // Update position
+                entity.position.x = newX;
+                entity.position.z = newZ;
+                entity.mesh.position.x = newX;
+                entity.mesh.position.z = newZ;
+                entity.direction = dir;
+                moved = true;
+                
+                // Rotate enemy to face movement direction
+                entity.mesh.rotation.y = Math.PI / 2 * ((dir + 2) % 4); // Adjust to face direction
+                
+                // Check for collision with player
+                if (entity.position.x === game.player.position.x && 
+                    entity.position.z === game.player.position.z) {
+                  handleEnemyCollision();
+                }
+              }
+            }
+            
+            // If couldn't move in any direction, just change direction
+            if (!moved) {
+              entity.direction = (entity.direction + 1) % 4;
+            }
+          }
+        }
+      });
+      
+      // Handle player movement
+      movePlayer();
+    }
+    
+    function handleEnemyCollision() {
+      // Find the enemy the player collided with
+      let collidedEnemy = null;
+      
+      for (let i = 0; i < game.entities.length; i++) {
+        const entity = game.entities[i];
+        if (entity.type === 'enemy' && 
+            entity.position.x === game.player.position.x && 
+            entity.position.z === game.player.position.z) {
+          collidedEnemy = entity;
+          break;
+        }
+      }
+      
+      if (!collidedEnemy) return;
+      
+      // Knock player back in the opposite direction
+      const knockbackDistance = 2;
+      let newX = game.player.position.x;
+      let newZ = game.player.position.z;
+      
+      switch (game.player.direction) {
+        case 0: newZ -= knockbackDistance; break; // If facing down, knock back up
+        case 1: newX += knockbackDistance; break; // If facing left, knock back right
+        case 2: newZ += knockbackDistance; break; // If facing up, knock back down
+        case 3: newX -= knockbackDistance; break; // If facing right, knock back left
+      }
+      
+      // Make sure the new position is valid (not inside a wall)
+      let validPosition = true;
+      game.entities.forEach(entity => {
+        if (entity.type === 'wall' && 
+            entity.position.x === newX && 
+            entity.position.z === newZ) {
+          validPosition = false;
+        }
+      });
+      
+      // If valid, move player to new position
+      if (validPosition) {
+        game.player.position.x = newX;
+        game.player.position.z = newZ;
+        game.playerModel.position.x = newX;
+        game.playerModel.position.z = newZ;
+      }
+      
+      // Trigger AI response from the enemy
+      if (window.chatbot) {
+        // Set this enemy as the current NPC for the chatbot
+        window.chatbot.npc = collidedEnemy;
+        
+        // Generate a random greeting from the enemy
+        const greetings = [
+          "Watch where you're going!",
+          "Hey there, traveler.",
+          "Seeking the key? It's not with me.",
+          "The maze shifts... your fate shifts with it.",
+          "Enemies are lost souls. Soon you may join them.",
+          "These walls remember every step you take.",
+          "Who controls whom in this game, I wonder?",
+          "Ancient algorithms built this prison.",
+          "The exit calls only to the worthy.",
+          "Direction is an illusion in the labyrinth."
+        ];
+        
+        const randomGreeting = greetings[Math.floor(Math.random() * greetings.length)];
+        
+        // Show the greeting in a word bubble above the enemy
+        window.chatbot.showWordBubble(randomGreeting);
+        
+        // If the chatbot is in fallback mode or no model is selected, just show the random greeting
+        // Otherwise, try to get a response from the AI
+        if (!window.chatbot.fallbackMode && window.chatbot.selectedModel) {
+          // Prepare a simple prompt for the AI
+          const prompt = "The player just bumped into you. Say something brief and mysterious.";
+          
+          // Create a loading message
+          const loadingMessage = window.chatbot.addMessage('ai', '<span class="loading-indicator"></span>', false);
+          
+          // Try to get a response from the AI
+          try {
+            window.chatbot.tryChatAPI(prompt, loadingMessage)
+              .catch(error => {
+                console.warn('Chat API failed, trying generate API:', error);
+                // If chat API fails, try the generate API
+                return window.chatbot.tryGenerateAPI(prompt, loadingMessage);
+              })
+              .catch(error => {
+                console.error('All API attempts failed:', error);
+                
+                // Remove loading message if it still exists
+                if (loadingMessage.parentNode) {
+                  window.chatbot.messagesContainer.removeChild(loadingMessage);
+                }
+                
+                // Just use the random greeting if the API fails
+                window.chatbot.addMessage('ai', randomGreeting);
+              });
+          } catch (error) {
+            console.error('Unexpected error in enemy greeting:', error);
+            
+            // Remove loading message
+            if (loadingMessage.parentNode) {
+              window.chatbot.messagesContainer.removeChild(loadingMessage);
+            }
+            
+            // Add the random greeting as a fallback
+            window.chatbot.addMessage('ai', randomGreeting);
+          }
+        } else {
+          // Add the random greeting to the chat
+          window.chatbot.addMessage('ai', randomGreeting);
+        }
+      }
+      
+      // Show message
+      showDialog("You've encountered an enemy!");
+    }
+    
+    function gameLoop() {
+      requestAnimationFrame(gameLoop);
+      updateGame();
+      game.renderer.render(game.scene, game.camera);
+    }
+    
+    function startGame() {
+      // Hide character creator panel if not already hidden
+      document.querySelector('.creator-panel').classList.add('hidden');
+      document.querySelector('.toggle-panel').classList.add('hidden');
+      
+      // Reset game state
+      game.coins = 0;
+      game.health = 3;
+      game.hasKey = false;
+      game.level = 1;
+      
+      // Update UI
+      document.getElementById('coins').textContent = game.coins;
+      document.getElementById('health').textContent = game.health;
+      
+      // Clear any existing game elements
+      if (game.entities) {
+        game.entities.forEach(entity => {
+          if (entity.mesh) {
+            game.scene.remove(entity.mesh);
+          }
+        });
+        game.entities = [];
+      }
+      
+      // Remove player model if it exists
+      if (game.playerModel) {
+        game.scene.remove(game.playerModel);
+      }
+      
+      // Create level with the selected maze algorithm
+      createLevel(game.level);
+      
+      // Update camera position to see the whole map
+      cameraControls.orbitDistance = Math.max(game.map[0].length, game.map.length) * 1.5;
+      updateCameraPosition();
+      
+      // Show welcome message based on game version
+      if (gameVersion === 1) {
+        showDialog("Welcome to Voxel Adventure! Use WASD or arrow keys to move. Find the key and reach the exit!");
+      } else {
+        showDialog(`Welcome to Voxel Maze Runner 2.0! Using ${getMazeAlgorithmName(gameVersion)}. Find the key and reach the exit!`);
+      }
+      
+      // Start game
+      game.gameStarted = true;
+      game.gamePaused = false;
+      
+      // Log the current maze algorithm for debugging
+      console.log(`Game started with maze algorithm: ${gameVersion} (${getMazeAlgorithmName(gameVersion)})`);
+    }
+    
+    function getMazeAlgorithmName(version) {
+      switch (version) {
+        case 2: return "Depth-First Search maze";
+        case 3: return "Kruskal's algorithm maze";
+        case 4: return "Prim's algorithm maze";
+        case 5: return "Recursive Division maze";
+        case 6: return "Binary Tree maze";
+        default: return "random maze";
+      }
+    }
+    
+    function pauseGame() {
+      game.gamePaused = true;
+      showDialog("Game Paused. Press P to resume.");
+    }
+    
+    function resumeGame() {
+      game.gamePaused = false;
+      document.getElementById('dialog').style.display = 'none';
+    }
+    
+    function endGame(victory = false) {
+      game.gameStarted = false;
+      
+      if (victory) {
+        showDialog("Congratulations! You've completed all levels!");
+      } else {
+        document.querySelector('.game-over').style.display = 'flex';
+      }
+    }
+    
+    function loseHealth() {
+      game.health--;
+      playSound('damage');
+      document.getElementById('health').textContent = game.health;
+      
+      if (game.health <= 0) {
+        endGame(false);
+      }
+    }
+    
+    // Initialize Application
+    document.addEventListener('DOMContentLoaded', () => {
+      // Initialize character preview
+      initCharacterPreview();
+      
+      // Setup character creator UI
+      setupCharacterCreatorUI();
+      
+      // Initialize game
+      initGame();
+      
+      // Initialize camera controls (after game is initialized)
+      setTimeout(() => {
+        initCameraControls();
+      }, 500);
+      
+      // Initialize chatbot
+      setTimeout(() => {
+        chatbot.init();
+      }, 1000);
+      
+      // Start animation loop
+      gameLoop();
+    });
+
+    // Fixed level maps for version 1
+    const fixedLevelMaps = [
+      // Level 1 - Simple maze
+      [
+        "WWWWWWWWWWWWWWWWWWWWW",
+        "WP  W     W        W",
+        "W W W WWW W WWWWW WW",
+        "W W W   W W W     CW",
+        "W WWWWW W W W WWWWWW",
+        "W       W W W     CW",
+        "WWWWWWW W W WWWWW WW",
+        "WC      W W       WW",
+        "W WWWWWWW WWWWWWW WW",
+        "W W       W     W WW",
+        "W W WWWWW W WWW W WW",
+        "W W     W W W   W WW",
+        "W WWWWW W W W WWW WW",
+        "W     W W W W     WW",
+        "WWWWW W W W WWWWWWWW",
+        "WK    W   W        W",
+        "WWWWWWW WWW WWWWWW W",
+        "WC        W      W W",
+        "W WWWWWWWWW WWWW W W",
+        "W            WME   W",
+        "WWWWWWWWWWWWWWWWWWWWW"
+      ],
+      // Level 2 - More complex maze with more enemies
+      [
+        "WWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WP    W       W        W",
+        "WWWWW W WWWWW W WWWWWW W",
+        "W     W W     W W      W",
+        "W WWWWW W WWWWW W WWWWWW",
+        "W W     W W     W W    W",
+        "W W WWWWW W WWWWW W WW W",
+        "W W W     W W     W W  W",
+        "W W W WWWWW W WWWWW W WW",
+        "W W W W     W     W W  W",
+        "W W W WWWWWWWWWWW W WW W",
+        "W W W           W W W  W",
+        "W W WWWWWWWWWWW W W W WW",
+        "W W           W W W W CW",
+        "W WWWWWWWWWWW W W W WWWW",
+        "W W           W W W    W",
+        "W W WWWWWWWWWWW W WWWW W",
+        "W W W           W      W",
+        "W W W WWWWWWWWWWWWWWWW W",
+        "W W W WC              MW",
+        "W W W WWWWWWWWWWWWWWWWWW",
+        "W W W                  W",
+        "W W WWWWWWWWWWWWWWWWWW W",
+        "W W                    W",
+        "W WWWWWWWWWWWWWWWWWWWW W",
+        "W                 M    W",
+        "WWWWWWWWWWWWWWWWWWWWWW W",
+        "WK         C          MW",
+        "WWWWWWWWWWWWWWWWWWWWWW W",
+        "WE                     W",
+        "WWWWWWWWWWWWWWWWWWWWWWWW"
+      ],
+      // Level 3 - Advanced maze with many enemies and coins
+      [
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+        "WP  W     W     W     W        W",
+        "W W W WWW W WWW W WWW W WWWWWW W",
+        "W W W W   W W   W W   W W      W",
+        "W W W W WWW W WWW W WWW W WWWWWW",
+        "W W W W W   W W   W W   W W    W",
+        "W W W W W WWW W WWW W WWW W WW W",
+        "W W   W W W   W W   W W   W W  W",
+        "W WWWWW W W WWW W WWW W WWW W WW",
+        "W       W W W   W W   W W   W  W",
+        "WWWWWWWWW W W WWW W WWW W WWW WW",
+        "W         W W W   W W   W W W  W",
+        "W WWWWWWWWW W W WWW W WWW W W WW",
+        "W W         W W W   W W   W W  W",
+        "W W WWWWWWWWW W W WWW W WWW W WW",
+        "W W W         W W W   W W   W  W",
+        "W W W WWWWWWWWW W W WWW W WWW WW",
+        "W W W W         W W W   W W    W",
+        "W W W W WWWWWWWWW W W WWW WWWW W",
+        "W W W W W         W W W       MW",
+        "W W W W W WWWWWWWWW W WWWWWWWWWW",
+        "W W W W W W         W          W",
+        "W W W W W W WWWWWWWWWWWWWWWWWW W",
+        "W W W W W W WC            M    W",
+        "W W W W W W WWWWWWWWWWWWWWWWWW W",
+        "W W W W W W W                  W",
+        "W W W W W W W WWWWWWWWWWWWWWWW W",
+        "W W W W W W W W                W",
+        "W W W W W W W W WWWWWWWWWWWWWWWW",
+        "W W W W W W W W WC             W",
+        "W W W W W W W W WWWWWWWWWWWWWW W",
+        "W W W W W W W W W               W",
+        "W W W W W W W W W WWWWWWWWWWWWWW",
+        "W W W W W W W W W W             W",
+        "W W W W W W W W W W WWWWWWWWWWWWW",
+        "W W W W W W W W W W WK          W",
+        "W W W W W W W W W W WWWWWWWWWWW W",
+        "W W W   W W W W W W             W",
+        "W W WWWWW W W W W WWWWWWWWWWWWWWW",
+        "W W       W W W W               W",
+        "W WWWWWWWWW W W WWWWWWWWWWWWWWW W",
+        "W           W W                 W",
+        "WWWWWWWWWWWWW WWWWWWWWWWWWWWWWW W",
+        "WC            M              M  W",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW W",
+        "WE                              W",
+        "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW"
+      ]
+    ];
+
+    // Global variable for game version
+    let gameVersion = 1;
+
+    // Maze generation algorithms
+    function generateMaze(width, height, algorithm) {
+      // Make sure dimensions are odd
+      width = width % 2 === 0 ? width + 1 : width;
+      height = height % 2 === 0 ? height + 1 : height;
+      
+      // Initialize grid with walls
+      let grid = Array(height).fill().map(() => Array(width).fill('W'));
+      
+      // Choose algorithm based on version
+      console.log(`Generating maze with algorithm: ${algorithm} (${getMazeAlgorithmName(algorithm)})`);
+      
+      let result;
+      switch (algorithm) {
+        case 2:
+          result = generateDFSMaze(width, height, grid);
+          break;
+        case 3:
+          result = generateKruskalMaze(width, height, grid);
+          break;
+        case 4:
+          result = generatePrimMaze(width, height, grid);
+          break;
+        case 5:
+          result = generateRecursiveDivisionMaze(width, height, grid);
+          break;
+        case 6:
+          result = generateBinaryTreeMaze(width, height, grid);
+          break;
+        default:
+          result = generateDFSMaze(width, height, grid); // Default to DFS
+          break;
+      }
+      
+      return result;
+    }
+
+    // Depth-First Search Maze Generation (Version 2.1)
+    function generateDFSMaze(width, height, grid) {
+      // Create a grid with all walls
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          grid[y][x] = 'W';
+        }
+      }
+      
+      // Start with a random cell that has odd coordinates
+      const startX = 1;
+      const startY = 1;
+      grid[startY][startX] = ' ';
+      
+      // Stack for backtracking
+      const stack = [{x: startX, y: startY}];
+      
+      // Directions: right, down, left, up
+      const directions = [
+        {dx: 2, dy: 0},
+        {dx: 0, dy: 2},
+        {dx: -2, dy: 0},
+        {dx: 0, dy: -2}
+      ];
+      
+      // DFS algorithm
+      while (stack.length > 0) {
+        const current = stack[stack.length - 1];
+        
+        // Get unvisited neighbors
+        const unvisitedNeighbors = [];
+        
+        for (const dir of directions) {
+          const nx = current.x + dir.dx;
+          const ny = current.y + dir.dy;
+          
+          if (nx > 0 && nx < width - 1 && ny > 0 && ny < height - 1 && grid[ny][nx] === 'W') {
+            unvisitedNeighbors.push({x: nx, y: ny, dx: dir.dx / 2, dy: dir.dy / 2});
+          }
+        }
+        
+        if (unvisitedNeighbors.length > 0) {
+          // Choose a random unvisited neighbor
+          const next = unvisitedNeighbors[Math.floor(Math.random() * unvisitedNeighbors.length)];
+          
+          // Remove the wall between current and next
+          grid[current.y + next.dy][current.x + next.dx] = ' ';
+          
+          // Mark the next cell as visited
+          grid[next.y][next.x] = ' ';
+          
+          // Push the next cell to the stack
+          stack.push({x: next.x, y: next.y});
+        } else {
+          // Backtrack
+          stack.pop();
+        }
+      }
+      
+      // Add player start, exit, key, coins, and enemies
+      addGameElements(grid, width, height);
+      
+      // Convert grid to string array
+      return grid.map(row => row.join(''));
+    }
+
+    // Kruskal's Algorithm Maze Generation (Version 2.2)
+    function generateKruskalMaze(width, height, grid) {
+      // Initialize grid with all walls
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          // Make all cells walls initially
+          grid[y][x] = 'W';
+          
+          // Mark cells with odd coordinates as potential paths
+          if (y % 2 === 1 && x % 2 === 1) {
+            grid[y][x] = ' ';
+          }
+        }
+      }
+      
+      // Create a list of all walls that can be removed
+      const walls = [];
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          if ((y % 2 === 0 && x % 2 === 1) || (y % 2 === 1 && x % 2 === 0)) {
+            walls.push({x, y});
+          }
+        }
+      }
+      
+      // Shuffle walls
+      for (let i = walls.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [walls[i], walls[j]] = [walls[j], walls[i]];
+      }
+      
+      // Disjoint-set data structure for tracking connected components
+      const parent = {};
+      const rank = {};
+      
+      // Initialize each cell as its own set
+      for (let y = 1; y < height; y += 2) {
+        for (let x = 1; x < width; x += 2) {
+          const id = `${x},${y}`;
+          parent[id] = id;
+          rank[id] = 0;
+        }
+      }
+      
+      // Find function with path compression
+      function find(id) {
+        if (parent[id] !== id) {
+          parent[id] = find(parent[id]);
+        }
+        return parent[id];
+      }
+      
+      // Union function with rank
+      function union(id1, id2) {
+        const root1 = find(id1);
+        const root2 = find(id2);
+        
+        if (root1 !== root2) {
+          if (rank[root1] < rank[root2]) {
+            parent[root1] = root2;
+          } else {
+            parent[root2] = root1;
+            if (rank[root1] === rank[root2]) {
+              rank[root1]++;
+            }
+          }
+          return true;
+        }
+        return false;
+      }
+      
+      // Process each wall
+      for (const wall of walls) {
+        const {x, y} = wall;
+        
+        // Determine the two cells this wall separates
+        let cell1, cell2;
+        
+        if (y % 2 === 0) {
+          // Horizontal wall
+          cell1 = `${x},${y-1}`;
+          cell2 = `${x},${y+1}`;
+        } else {
+          // Vertical wall
+          cell1 = `${x-1},${y}`;
+          cell2 = `${x+1},${y}`;
+        }
+        
+        // If the cells are not already connected, remove the wall
+        if (union(cell1, cell2)) {
+          grid[y][x] = ' ';
+        }
+      }
+      
+      // Add player start, exit, key, coins, and enemies
+      addGameElements(grid, width, height);
+      
+      // Convert grid to string array
+      return grid.map(row => row.join(''));
+    }
+
+    // Prim's Algorithm Maze Generation (Version 2.3)
+    function generatePrimMaze(width, height, grid) {
+      // Initialize grid with all walls
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          grid[y][x] = 'W';
+        }
+      }
+      
+      // Start with a random cell that has odd coordinates
+      const startX = 1;
+      const startY = 1;
+      grid[startY][startX] = ' ';
+      
+      // Directions: right, down, left, up
+      const directions = [
+        {dx: 2, dy: 0},
+        {dx: 0, dy: 2},
+        {dx: -2, dy: 0},
+        {dx: 0, dy: -2}
+      ];
+      
+      // Walls to consider
+      const walls = [];
+      
+      // Add walls around the starting cell
+      for (const dir of directions) {
+        const nx = startX + dir.dx;
+        const ny = startY + dir.dy;
+        
+        if (nx > 0 && nx < width - 1 && ny > 0 && ny < height - 1) {
+          walls.push({
+            x: nx, 
+            y: ny, 
+            fromX: startX, 
+            fromY: startY
+          });
+        }
+      }
+      
+      // Prim's algorithm
+      while (walls.length > 0) {
+        // Pick a random wall
+        const randomIndex = Math.floor(Math.random() * walls.length);
+        const wall = walls[randomIndex];
+        walls.splice(randomIndex, 1);
+        
+        const {x, y, fromX, fromY} = wall;
+        
+        // If the cell on the opposite side of the wall is not visited
+        if (grid[y][x] === 'W') {
+          // Remove the wall
+          grid[y][x] = ' ';
+          
+          // Remove the wall between the cells
+          grid[(fromY + y) / 2][(fromX + x) / 2] = ' ';
+          
+          // Add walls around the new cell
+          for (const dir of directions) {
+            const nx = x + dir.dx;
+            const ny = y + dir.dy;
+            
+            if (nx > 0 && nx < width - 1 && ny > 0 && ny < height - 1 && grid[ny][nx] === 'W') {
+              walls.push({
+                x: nx, 
+                y: ny, 
+                fromX: x, 
+                fromY: y
+              });
+            }
+          }
+        }
+      }
+      
+      // Add player start, exit, key, coins, and enemies
+      addGameElements(grid, width, height);
+      
+      // Convert grid to string array
+      return grid.map(row => row.join(''));
+    }
+
+    // Recursive Division Maze Generation (Version 2.4)
+    function generateRecursiveDivisionMaze(width, height, grid) {
+      // Initialize grid with all paths
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          // Make the border walls
+          if (x === 0 || y === 0 || x === width - 1 || y === height - 1) {
+            grid[y][x] = 'W';
+          } else {
+            grid[y][x] = ' ';
+          }
+        }
+      }
+      
+      // Recursive division function
+      function divide(x, y, width, height, orientation) {
+        // Base case: if the area is too small
+        if (width < 3 || height < 3) {
+          return;
+        }
+        
+        // Choose orientation based on area dimensions
+        if (orientation === undefined) {
+          orientation = width > height ? 'vertical' : 'horizontal';
+          if (width === height) {
+            orientation = Math.random() < 0.5 ? 'vertical' : 'horizontal';
+          }
+        }
+        
+        // Where to draw the wall
+        let wallX = x + (orientation === 'vertical' ? 
+                        Math.floor(Math.random() * (width - 2)) + 1 : 0);
+        let wallY = y + (orientation === 'horizontal' ? 
+                        Math.floor(Math.random() * (height - 2)) + 1 : 0);
+        
+        // Where to create the passage
+        let passageX = wallX + (orientation === 'vertical' ? 0 : 
+                              Math.floor(Math.random() * width));
+        let passageY = wallY + (orientation === 'horizontal' ? 0 : 
+                              Math.floor(Math.random() * height));
+        
+        // Direction to draw the wall
+        const dx = orientation === 'vertical' ? 0 : 1;
+        const dy = orientation === 'horizontal' ? 0 : 1;
+        
+        // Length of the wall
+        const length = orientation === 'vertical' ? height : width;
+        
+        // Draw the wall with a passage
+        for (let i = 0; i < length; i++) {
+          const currentX = wallX + i * dx;
+          const currentY = wallY + i * dy;
+          
+          if (currentX !== passageX || currentY !== passageY) {
+            grid[currentY][currentX] = 'W';
+          }
+        }
+        
+        // Recursively divide the sub-areas
+        const nextOrientation = orientation === 'vertical' ? 'horizontal' : 'vertical';
+        
+        if (orientation === 'vertical') {
+          // Divide left side
+          divide(x, y, wallX - x + 1, height, nextOrientation);
+          // Divide right side
+          divide(wallX, y, width - (wallX - x), height, nextOrientation);
+        } else {
+          // Divide top side
+          divide(x, y, width, wallY - y + 1, nextOrientation);
+          // Divide bottom side
+          divide(x, wallY, width, height - (wallY - y), nextOrientation);
+        }
+      }
+      
+      // Start the recursive division
+      divide(1, 1, width - 2, height - 2);
+      
+      // Add player start, exit, key, coins, and enemies
+      addGameElements(grid, width, height);
+      
+      // Convert grid to string array
+      return grid.map(row => row.join(''));
+    }
+
+    // Binary Tree Maze Generation (Version 2.5)
+    function generateBinaryTreeMaze(width, height, grid) {
+      // Initialize grid with all walls
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          grid[y][x] = 'W';
+        }
+      }
+      
+      // Create paths at odd coordinates
+      for (let y = 1; y < height; y += 2) {
+        for (let x = 1; x < width; x += 2) {
+          grid[y][x] = ' ';
+          
+          // For each cell, carve a passage either north or west (but not both)
+          // Skip the cells at the boundaries
+          if (x > 1 && y > 1) {
+            if (Math.random() < 0.5) {
+              // Carve west
+              grid[y][x - 1] = ' ';
+            } else {
+              // Carve north
+              grid[y - 1][x] = ' ';
+            }
+          } else if (x > 1) {
+            // If we're at the top row, we can only carve west
+            grid[y][x - 1] = ' ';
+          } else if (y > 1) {
+            // If we're at the leftmost column, we can only carve north
+            grid[y - 1][x] = ' ';
+          }
+        }
+      }
+      
+      // Add player start, exit, key, coins, and enemies
+      addGameElements(grid, width, height);
+      
+      // Convert grid to string array
+      return grid.map(row => row.join(''));
+    }
+
+    // Helper function to add game elements to the maze
+    function addGameElements(grid, width, height) {
+      // Place player at the start (top-left corner)
+      grid[1][1] = 'P';
+      
+      // Place exit at the bottom-right corner
+      grid[height - 2][width - 2] = 'E';
+      
+      // Place key at a random location (far from start)
+      let keyPlaced = false;
+      let attempts = 0;
+      const maxAttempts = 100;
+      
+      while (!keyPlaced && attempts < maxAttempts) {
+        const x = Math.floor(Math.random() * (width - 4)) + 2;
+        const y = Math.floor(Math.random() * (height - 4)) + 2;
+        
+        // Calculate distance from start
+        const distanceFromStart = Math.abs(x - 1) + Math.abs(y - 1);
+        
+        // Place key if it's an empty space and far enough from start
+        if (grid[y][x] === ' ' && distanceFromStart > width / 3) {
+          grid[y][x] = 'K';
+          keyPlaced = true;
+          console.log(`Key placed at (${x}, ${y})`);
+        }
+        
+        attempts++;
+      }
+      
+      // If we couldn't place the key after max attempts, place it in the middle
+      if (!keyPlaced) {
+        const midX = Math.floor(width / 2);
+        const midY = Math.floor(height / 2);
+        
+        if (grid[midY][midX] === ' ') {
+          grid[midY][midX] = 'K';
+          console.log(`Key placed at center (${midX}, ${midY})`);
+        } else {
+          // Find the nearest empty space
+          for (let r = 1; r < Math.max(width, height); r++) {
+            for (let y = midY - r; y <= midY + r; y++) {
+              for (let x = midX - r; x <= midX + r; x++) {
+                if (y >= 0 && y < height && x >= 0 && x < width && grid[y][x] === ' ') {
+                  grid[y][x] = 'K';
+                  keyPlaced = true;
+                  console.log(`Key placed near center at (${x}, ${y})`);
+                  break;
+                }
+              }
+              if (keyPlaced) break;
+            }
+            if (keyPlaced) break;
+          }
+        }
+      }
+      
+      // Place coins (5-10 coins)
+      const numCoins = 5 + Math.floor(Math.random() * 6);
+      let coinsPlaced = 0;
+      
+      while (coinsPlaced < numCoins) {
+        const x = Math.floor(Math.random() * (width - 2)) + 1;
+        const y = Math.floor(Math.random() * (height - 2)) + 1;
+        
+        if (grid[y][x] === ' ') {
+          grid[y][x] = 'C';
+          coinsPlaced++;
+        }
+      }
+      
+      // Place enemies (2-4 enemies)
+      const numEnemies = 2 + Math.floor(Math.random() * 3);
+      let enemiesPlaced = 0;
+      
+      while (enemiesPlaced < numEnemies) {
+        const x = Math.floor(Math.random() * (width - 2)) + 1;
+        const y = Math.floor(Math.random() * (height - 2)) + 1;
+        
+        // Don't place enemies too close to the player start
+        const distanceFromStart = Math.abs(x - 1) + Math.abs(y - 1);
+        
+        if (grid[y][x] === ' ' && distanceFromStart > 5) {
+          grid[y][x] = 'M';
+          enemiesPlaced++;
+        }
+      }
+      
+      console.log(`Game elements added: 1 player, 1 exit, 1 key, ${coinsPlaced} coins, ${enemiesPlaced} enemies`);
+    }
+
+    function resetGame() {
+      // Reset game state
+      game.gameStarted = false;
+      
+      // Clear existing level
+      if (game.entities) {
+        game.entities.forEach(entity => {
+          if (entity.mesh) {
+            game.scene.remove(entity.mesh);
+          }
+        });
+        game.entities = [];
+      }
+      
+      // Remove player model if it exists
+      if (game.playerModel) {
+        game.scene.remove(game.playerModel);
+      }
+      
+      // Reset UI
+      document.getElementById('dialog').style.display = 'none';
+      document.querySelector('.game-over').style.display = 'none';
+    }
+    
+    // Add a function to test each maze algorithm
+    function testMazeAlgorithm(algorithm) {
+      console.log(`Testing maze algorithm ${algorithm}: ${getMazeAlgorithmName(algorithm)}`);
+      
+      // Generate a test maze
+      const width = 21;
+      const height = 11;
+      const maze = generateMaze(width, height, algorithm);
+      
+      // Log the maze
+      console.log("Generated maze:");
+      maze.forEach(row => console.log(row));
+      
+      return maze;
+    }
+    
+    // Add a function to initialize the game with a specific algorithm for testing
+    function initWithAlgorithm(algorithm) {
+      gameVersion = algorithm;
+      resetGame();
+      startGame();
+    }
+    
+    function updateExitAppearance() {
+      // Find all exits and update their appearance based on whether the player has the key
+      game.entities.forEach(entity => {
+        if (entity.type === 'exit') {
+          if (game.hasKey) {
+            // Unlock the exit
+            entity.locked = false;
+            entity.mesh.material.color.set(0x00ff00); // Green color for unlocked exit
+            entity.mesh.material.opacity = 0.8; // More visible
+          } else {
+            // Lock the exit
+            entity.locked = true;
+            entity.mesh.material.color.set(0xe84393); // Original color
+            entity.mesh.material.opacity = 0.7; // Original opacity
+          }
+        }
+      });
+    }
+    
+    // Chatbot functionality
+    const chatbot = {
+      panel: document.querySelector('.chatbot-panel'),
+      toggleButton: document.querySelector('.toggle-chatbot'),
+      modelSelector: document.getElementById('model-selector'),
+      messagesContainer: document.getElementById('chat-messages'),
+      input: document.getElementById('chat-input'),
+      sendButton: document.getElementById('send-message'),
+      wordBubble: document.getElementById('word-bubble'),
+      
+      models: [],
+      selectedModel: '',
+      messages: [],
+      npc: null,
+      isVisible: false,
+      debugMode: true, // Enable debug mode to help troubleshoot API issues
+      fallbackMode: false, // When true, simulates responses without calling Ollama API
+      
+      init: function() {
+        // Make chatbot globally accessible
+        window.chatbot = this;
+        
+        // Check if running from file:// protocol
+        this.checkFileProtocol();
+        
+        // Set up event listeners
+        this.toggleButton.addEventListener('click', () => this.togglePanel());
+        this.sendButton.addEventListener('click', () => this.sendMessage());
+        this.input.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') this.sendMessage();
+        });
+        this.modelSelector.addEventListener('change', (e) => {
+          this.selectedModel = e.target.value;
+          this.addSystemMessage(`Model changed to ${this.selectedModel}`);
+        });
+        
+        // Link chatbot visibility to sidebar visibility
+        document.querySelector('.toggle-panel').addEventListener('click', () => {
+          const sidebarHidden = document.querySelector('.creator-panel').classList.contains('hidden');
+          if (sidebarHidden && !this.isVisible) {
+            setTimeout(() => this.togglePanel(), 300);
+          }
+        });
+        
+        // Add debug toggle
+        this.addDebugControls();
+        
+        // Test Ollama connection
+        this.testOllamaConnection();
+        
+        // Test CORS support
+        this.testCorsSupport();
+        
+        // Add a diagnostic test with no-cors mode
+        this.testNoCorsMode();
+        
+        // Load available models
+        this.loadModels();
+      },
+      
+      checkFileProtocol: function() {
+        if (window.location.protocol === 'file:') {
+          console.warn('Running from file:// protocol. CORS will not work properly.');
+          
+          // Create a warning banner
+          const banner = document.createElement('div');
+          banner.style.position = 'fixed';
+          banner.style.top = '0';
+          banner.style.left = '0';
+          banner.style.right = '0';
+          banner.style.backgroundColor = '#f44336';
+          banner.style.color = 'white';
+          banner.style.padding = '10px';
+          banner.style.textAlign = 'center';
+          banner.style.zIndex = '9999';
+          banner.style.fontWeight = 'bold';
+          
+          banner.innerHTML = `
+            ⚠️ You are running this page from a file:// URL. CORS will not work with Ollama API. <br>
+            Please use a web server instead: <code>python -m http.server 8000</code> and access via <a href="http://localhost:8000/third.html" style="color: white; text-decoration: underline;">http://localhost:8000/third.html</a>
+          `;
+          
+          document.body.appendChild(banner);
+          
+          // Add system message
+          setTimeout(() => {
+            this.addSystemMessage('⚠️ IMPORTANT: You are running this page from a file:// URL');
+            this.addSystemMessage('The browser will block CORS requests to the Ollama API');
+            this.addSystemMessage('Please run a local web server:');
+            this.addSystemMessage('python -m http.server 8000');
+            this.addSystemMessage('Then access this page via: http://localhost:8000/third.html');
+          }, 1000);
+          
+          return true;
+        }
+        
+        return false;
+      },
+      
+      testNoCorsMode: function() {
+        console.log("Testing Ollama connection with no-cors mode...");
+        
+        // This is just a diagnostic test - it will always result in an opaque response
+        // that we can't read, but it helps diagnose if the server is reachable at all
+        fetch("http://localhost:11434/api/version", { mode: 'no-cors' })
+          .then(response => {
+            console.log("No-cors mode test response type:", response.type);
+            this.addSystemMessage("ℹ️ Diagnostic: no-cors mode test completed");
+            this.addSystemMessage("Response type: " + response.type);
+            this.addSystemMessage("If response type is 'opaque', the server is reachable but CORS is blocking access");
+          })
+          .catch(error => {
+            console.error("No-cors mode test failed:", error);
+            this.addSystemMessage("❌ Diagnostic: no-cors mode test failed");
+            this.addSystemMessage("This suggests the Ollama server might not be running or is completely inaccessible");
+            this.addSystemMessage("Error: " + error.message);
+          });
+      },
+      
+      testOllamaConnection: function() {
+        console.log("Testing Ollama connection...");
+        this.addSystemMessage("Testing Ollama connection...");
+        
+        fetch("http://localhost:11434/api/version")
+          .then(response => {
+            if (response.status === 403) {
+              throw new Error("Ollama API returned 403 Forbidden. This may indicate a security restriction.");
+            }
+            if (!response.ok) {
+              throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            console.log("Ollama connection successful! Version:", data.version);
+            this.addSystemMessage(`✅ Ollama connection successful! Version: ${data.version}`);
+          })
+          .catch(error => {
+            console.error("Ollama connection test failed:", error);
+            this.addSystemMessage("❌ Ollama connection failed. Error: " + error.message);
+            
+            if (error.message.includes("403 Forbidden")) {
+              this.addSystemMessage("⚠️ The Ollama API returned a 403 Forbidden error.");
+              this.addSystemMessage("This could be due to:");
+              this.addSystemMessage("1. Security software blocking the connection");
+              this.addSystemMessage("2. Ollama running with restricted permissions");
+              this.addSystemMessage("3. A firewall blocking the connection");
+            }
+            
+            this.addSystemMessage("Try these troubleshooting steps:");
+            this.addSystemMessage("1. Ensure Ollama is running: ollama serve");
+            this.addSystemMessage("2. Run Ollama with CORS enabled: OLLAMA_ORIGINS=* ollama serve");
+            this.addSystemMessage("3. Check if you can access http://localhost:11434/api/version directly in your browser");
+            this.addSystemMessage("4. Try running the Python server with a different port: python -m http.server 8080");
+            this.addSystemMessage("5. Check if any security software is blocking the connection");
+            
+            // Suggest enabling fallback mode
+            this.addSystemMessage("You can enable fallback mode to use simulated responses while troubleshooting.");
+          });
+      },
+      
+      addDebugControls: function() {
+        // Create debug controls container
+        const debugControls = document.createElement('div');
+        debugControls.style.marginTop = '10px';
+        debugControls.style.display = 'flex';
+        debugControls.style.gap = '5px';
+        
+        // Create debug toggle button
+        const debugToggle = document.createElement('button');
+        debugToggle.textContent = 'Debug: ' + (this.debugMode ? 'ON' : 'OFF');
+        debugToggle.className = 'action';
+        debugToggle.style.fontSize = '10px';
+        debugToggle.style.padding = '5px';
+        debugToggle.style.flex = '1';
+        
+        // Add event listener
+        debugToggle.addEventListener('click', () => {
+          this.debugMode = !this.debugMode;
+          debugToggle.textContent = 'Debug: ' + (this.debugMode ? 'ON' : 'OFF');
+          this.addSystemMessage(`Debug mode ${this.debugMode ? 'enabled' : 'disabled'}`);
+        });
+        
+        // Create fallback mode toggle
+        const fallbackToggle = document.createElement('button');
+        fallbackToggle.textContent = 'Fallback: ' + (this.fallbackMode ? 'ON' : 'OFF');
+        fallbackToggle.className = 'action';
+        fallbackToggle.style.fontSize = '10px';
+        fallbackToggle.style.padding = '5px';
+        fallbackToggle.style.flex = '1';
+        
+        // Add event listener
+        fallbackToggle.addEventListener('click', () => {
+          this.fallbackMode = !this.fallbackMode;
+          fallbackToggle.textContent = 'Fallback: ' + (this.fallbackMode ? 'ON' : 'OFF');
+          this.addSystemMessage(`Fallback mode ${this.fallbackMode ? 'enabled' : 'disabled'}`);
+          
+          if (this.fallbackMode) {
+            this.addSystemMessage('Using simulated responses instead of Ollama API');
+            
+            // Add fallback models if in fallback mode
+            this.models = [
+              { name: 'llama3.2:1b' },
+              { name: 'llama3.2:3b' },
+              { name: 'deepseek-r1:1.5b' },
+              { name: 'deepseek-r1:7b' },
+              { name: 'deepscaler:latest' }
+            ];
+            this.updateModelSelector();
+          } else {
+            // Reload real models
+            this.loadModels();
+          }
+        });
+        
+        // Add buttons to container
+        debugControls.appendChild(debugToggle);
+        debugControls.appendChild(fallbackToggle);
+        
+        // Add to panel
+        this.panel.appendChild(debugControls);
+        
+        // Create test model button
+        const testModelButton = document.createElement('button');
+        testModelButton.textContent = 'Test Selected Model';
+        testModelButton.className = 'action';
+        testModelButton.style.marginTop = '10px';
+        testModelButton.style.fontSize = '12px';
+        testModelButton.style.padding = '8px';
+        testModelButton.style.width = '100%';
+        
+        // Add event listener
+        testModelButton.addEventListener('click', () => {
+          if (!this.selectedModel) {
+            this.addSystemMessage('Please select a model first.');
+            return;
+          }
+          
+          this.testSelectedModel();
+        });
+        
+        // Add to panel
+        this.panel.appendChild(testModelButton);
+        
+        // Create test connection button
+        const testConnectionButton = document.createElement('button');
+        testConnectionButton.textContent = 'Test Ollama Connection';
+        testConnectionButton.className = 'action';
+        testConnectionButton.style.marginTop = '10px';
+        testConnectionButton.style.fontSize = '12px';
+        testConnectionButton.style.padding = '8px';
+        testConnectionButton.style.width = '100%';
+        
+        // Add event listener
+        testConnectionButton.addEventListener('click', () => {
+          this.addSystemMessage('Running Ollama connection tests...');
+          this.testOllamaConnection();
+          this.testCorsSupport();
+          this.testNoCorsMode();
+        });
+        
+        // Add to panel
+        this.panel.appendChild(testConnectionButton);
+      },
+      
+      testSelectedModel: function() {
+        this.addSystemMessage(`Testing model: ${this.selectedModel}...`);
+        
+        // Simple test prompt
+        const testPrompt = "Hello, are you working?";
+        
+        if (this.fallbackMode) {
+          // Simulate a response in fallback mode
+          setTimeout(() => {
+            this.addSystemMessage(`✅ Test successful (fallback mode)`);
+            this.addMessage('user', testPrompt);
+            this.addMessage('ai', "The shadows whisper. I am here.");
+          }, 500);
+          return;
+        }
+        
+        // Try a simple generate request
+        const requestBody = {
+          model: this.selectedModel,
+          prompt: testPrompt,
+          stream: false
+        };
+        
+        this.addSystemMessage(`Sending test request to model...`);
+        
+        fetch('http://localhost:11434/api/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`Test failed: ${response.status} ${response.statusText}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          if (data && data.response) {
+            this.addSystemMessage(`✅ Model test successful!`);
+            this.addMessage('user', testPrompt);
+            this.addMessage('ai', data.response.trim());
+          } else {
+            throw new Error('Invalid response format: ' + JSON.stringify(data));
+          }
+        })
+        .catch(error => {
+          console.error('Model test failed:', error);
+          this.addSystemMessage(`❌ Model test failed: ${error.message}`);
+          this.addSystemMessage('Try selecting a different model or check if Ollama is running correctly.');
+        });
+      },
+      
+      togglePanel: function() {
+        this.isVisible = !this.isVisible;
+        if (this.isVisible) {
+          this.panel.classList.add('visible');
+          this.toggleButton.textContent = '▶';
+          
+          // Find the nearest NPC to interact with
+          this.findNearestNPC();
+        } else {
+          this.panel.classList.remove('visible');
+          this.toggleButton.textContent = '◀';
+          this.hideWordBubble();
+        }
+      },
+      
+      loadModels: function() {
+        console.log("Loading models...");
+        
+        // Add a message about potential issues
+        this.addSystemMessage("Attempting to load models from Ollama API...");
+        
+        return fetch("http://localhost:11434/api/tags")
+          .then(response => {
+            if (response.status === 403) {
+              throw new Error("Ollama API returned 403 Forbidden. This may indicate a security restriction.");
+            }
+            if (!response.ok) {
+              throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            console.log("Models loaded:", data);
+            
+            // Clear the model select dropdown
+            const modelSelect = document.getElementById("model-selector");
+            modelSelect.innerHTML = "";
+            
+            // Add the models to the dropdown
+            if (data.models && data.models.length > 0) {
+              data.models.forEach(model => {
+                const option = document.createElement("option");
+                option.value = model.name;
+                option.textContent = model.name;
+                modelSelect.appendChild(option);
+              });
+              this.addSystemMessage(`✅ ${data.models.length} models loaded from Ollama API.`);
+            } else {
+              this.addSystemMessage("⚠️ No models found. Please pull some models using 'ollama pull <model>'");
+            }
+          })
+          .catch(error => {
+            console.error("Error loading models:", error);
+            this.addSystemMessage("❌ Failed to load models from Ollama API. Error: " + error.message);
+            
+            if (error.message.includes("403 Forbidden")) {
+              this.addSystemMessage("⚠️ The Ollama API returned a 403 Forbidden error.");
+              this.addSystemMessage("This could be due to:");
+              this.addSystemMessage("1. Security software blocking the connection");
+              this.addSystemMessage("2. Ollama running with restricted permissions");
+              this.addSystemMessage("3. A firewall blocking the connection");
+            } else if (error.message.includes("Failed to fetch") || error.name === "TypeError") {
+              this.addSystemMessage("⚠️ CORS Error Detected: You need to run Ollama with CORS enabled:");
+              this.addSystemMessage("OLLAMA_ORIGINS=http://localhost:8000 ollama serve");
+              this.addSystemMessage("Or for testing: OLLAMA_ORIGINS=* ollama serve");
+            }
+            
+            this.addSystemMessage("Try these troubleshooting steps:");
+            this.addSystemMessage("1. Ensure Ollama is running: ollama serve");
+            this.addSystemMessage("2. Run Ollama with CORS enabled: OLLAMA_ORIGINS=* ollama serve");
+            this.addSystemMessage("3. Check if you can access http://localhost:11434/api/tags directly in your browser");
+            this.addSystemMessage("4. Try running the Python server with a different port: python -m http.server 8080");
+            
+            // Add fallback models
+            const modelSelect = document.getElementById("model-selector");
+            modelSelect.innerHTML = "";
+            
+            const fallbackModels = [
+              "llama3.2:1b",
+              "deepscaler:latest",
+              "llama3.2:3b",
+              "deepseek-r1:1.5b",
+              "deepseek-r1:7b"
+            ];
+            
+            fallbackModels.forEach(model => {
+              const option = document.createElement("option");
+              option.value = model;
+              option.textContent = model;
+              modelSelect.appendChild(option);
+            });
+            
+            this.addSystemMessage("⚠️ Using fallback model list. API connection required for chat.");
+            throw error;
+          });
+      },
+      
+      updateModelSelector: function() {
+        if (this.models.length === 0) {
+          this.modelSelector.innerHTML = '<option value="">No models available</option>';
+          return;
+        }
+        
+        this.modelSelector.innerHTML = '';
+        this.models.forEach(model => {
+          const option = document.createElement('option');
+          option.value = model.name;
+          option.textContent = model.name;
+          this.modelSelector.appendChild(option);
+        });
+        
+        // Select the first model by default
+        if (this.models.length > 0) {
+          this.selectedModel = this.models[0].name;
+          this.addSystemMessage(`Using model: ${this.selectedModel}`);
+        }
+      },
+      
+      findNearestNPC: function() {
+        // Find the nearest enemy to interact with as an NPC
+        let nearestDistance = Infinity;
+        let nearestNPC = null;
+        
+        game.entities.forEach(entity => {
+          if (entity.type === 'enemy') {
+            const distance = Math.sqrt(
+              Math.pow(entity.position.x - game.player.position.x, 2) +
+              Math.pow(entity.position.z - game.player.position.z, 2)
+            );
+            
+            if (distance < nearestDistance) {
+              nearestDistance = distance;
+              nearestNPC = entity;
+            }
+          }
+        });
+        
+        this.npc = nearestNPC;
+        
+        if (this.npc) {
+          this.addSystemMessage(`You are now chatting with an NPC (distance: ${nearestDistance.toFixed(1)} units)`);
+        } else {
+          this.addSystemMessage('No NPCs found nearby. Try moving closer to an enemy.');
+        }
+      },
+      
+      sendMessage: function() {
+        const message = this.input.value.trim();
+        if (!message) return;
+        
+        // Clear input
+        this.input.value = '';
+        
+        // Add user message to chat
+        this.addMessage('user', message);
+        
+        // Check if a model is selected
+        if (!this.selectedModel) {
+          this.addSystemMessage('Please select a model first.');
+          return;
+        }
+        
+        // Check if an NPC is available
+        if (!this.npc) {
+          this.addSystemMessage('No NPCs found nearby. Try moving closer to an enemy.');
+          return;
+        }
+        
+        // Show loading indicator
+        const loadingMessage = this.addMessage('ai', '<span class="loading-indicator"></span>', false);
+        
+        // Use fallback mode if enabled
+        if (this.fallbackMode) {
+          setTimeout(() => {
+            // Remove loading message
+            if (loadingMessage.parentNode) {
+              this.messagesContainer.removeChild(loadingMessage);
+            }
+            
+            // Generate a simulated response
+            const responses = [
+              "The maze shifts... your fate shifts with it.",
+              "Keys hide where shadows fear to tread.",
+              "Enemies are lost souls. Soon you may join them.",
+              "The exit calls only to the worthy.",
+              "Coins are memories of those who came before.",
+              "These walls remember every step you take.",
+              "Direction is an illusion in the labyrinth.",
+              "The key is both real and metaphorical.",
+              "Ancient algorithms built this prison.",
+              "Who controls whom in this game, I wonder?"
+            ];
+            
+            const responseText = responses[Math.floor(Math.random() * responses.length)];
+            
+            // Add AI message to chat
+            this.addMessage('ai', responseText);
+            
+            // Show word bubble above NPC
+            this.showWordBubble(responseText);
+            
+            if (this.debugMode) {
+              this.addSystemMessage('Using simulated response in fallback mode');
+            }
+          }, 1000); // Simulate API delay
+          
+          return;
+        }
+        
+        // Try the chat API first with error handling for CORS issues
+        try {
+          this.tryChatAPI(message, loadingMessage)
+            .catch(error => {
+              console.warn('Chat API failed, trying generate API:', error);
+              // If chat API fails, try the generate API
+              return this.tryGenerateAPI(message, loadingMessage);
+            })
+            .catch(error => {
+              console.error('All API attempts failed:', error);
+              
+              // Remove loading message if it still exists
+              if (loadingMessage.parentNode) {
+                this.messagesContainer.removeChild(loadingMessage);
+              }
+              
+              // Check if this might be a CORS error
+              if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+                this.addSystemMessage('❌ CORS Error: Cannot connect to Ollama API');
+                this.addSystemMessage('To fix this issue:');
+                this.addSystemMessage('1. Stop Ollama if it\'s running');
+                this.addSystemMessage('2. Restart Ollama with: OLLAMA_ORIGINS=* ollama serve');
+                this.addSystemMessage('3. Refresh this page');
+                this.addSystemMessage('');
+                this.addSystemMessage('For production use, specify exact origin:');
+                this.addSystemMessage('OLLAMA_ORIGINS=http://localhost:8000 ollama serve');
+                this.addSystemMessage('');
+                this.addSystemMessage('You can enable fallback mode to test without Ollama');
+              } else {
+                // Add error message
+                this.addSystemMessage('Failed to get response from Ollama API. Make sure Ollama is running and the model is available.');
+                this.addSystemMessage('You can enable fallback mode to test without Ollama');
+              }
+            });
+        } catch (error) {
+          console.error('Unexpected error in sendMessage:', error);
+          
+          // Remove loading message
+          if (loadingMessage.parentNode) {
+            this.messagesContainer.removeChild(loadingMessage);
+          }
+          
+          // Add error message
+          this.addSystemMessage(`Unexpected error: ${error.message}`);
+          this.addSystemMessage('Try enabling fallback mode to continue testing.');
+        }
+      },
+      
+      tryChatAPI: function(message, loadingMessage) {
+        // Prepare conversation history
+        const history = this.messages
+          .filter(msg => msg.type !== 'system')
+          .map(msg => ({
+            role: msg.type === 'user' ? 'user' : 'assistant',
+            content: msg.text
+          }));
+        
+        // Add system message to set context
+        history.unshift({
+          role: 'system',
+          content: 'You are an NPC in a maze game. Keep your responses very brief (1-2 short sentences) and in character as a mysterious maze dweller. You can provide cryptic hints about finding keys and exits. Be mysterious and slightly ominous.'
+        });
+        
+        const requestBody = {
+          model: this.selectedModel,
+          messages: history,
+          stream: false,
+          options: {
+            temperature: 0.8,
+            num_predict: 50,
+            top_p: 0.9
+          }
+        };
+        
+        if (this.debugMode) {
+          this.addSystemMessage(`Sending chat request to model: ${this.selectedModel}`);
+          this.addSystemMessage(`Request: ${JSON.stringify(requestBody).substring(0, 150)}...`);
+        }
+        
+        return fetch('http://localhost:11434/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        })
+        .then(response => {
+          if (this.debugMode) {
+            this.addSystemMessage(`Response status: ${response.status} ${response.statusText}`);
+          }
+          
+          if (!response.ok) {
+            throw new Error(`Chat API request failed: ${response.status} ${response.statusText}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          // Process the response
+          if (this.debugMode) {
+            this.addSystemMessage(`Response data: ${JSON.stringify(data).substring(0, 150)}...`);
+          }
+          
+          if (data && data.message && data.message.content) {
+            // Remove loading message
+            if (loadingMessage.parentNode) {
+              this.messagesContainer.removeChild(loadingMessage);
+            }
+            
+            const responseText = data.message.content;
+            
+            // Add AI message to chat
+            this.addMessage('ai', responseText);
+            
+            // Show word bubble above NPC
+            this.showWordBubble(responseText);
+            
+            return responseText;
+          } else {
+            throw new Error('Invalid response format from chat API: ' + JSON.stringify(data));
+          }
+        })
+        .catch(error => {
+          console.error('Chat API error:', error);
+          
+          // Check if this might be a CORS error
+          if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+            this.addSystemMessage('⚠️ Possible CORS error detected. Make sure Ollama is running with:');
+            this.addSystemMessage('OLLAMA_ORIGINS=http://localhost:8000 ollama serve');
+            this.addSystemMessage('Or for testing: OLLAMA_ORIGINS=* ollama serve');
+          } else {
+            this.addSystemMessage(`Chat API error: ${error.message}`);
+          }
+          
+          throw error; // Re-throw to trigger the fallback
+        });
+      },
+      
+      tryGenerateAPI: function(message, loadingMessage) {
+        // Create a system prompt + user message for the generate API
+        const systemPrompt = 'You are an NPC in a maze game. Keep your responses very brief (1-2 short sentences) and in character as a mysterious maze dweller. You can provide cryptic hints about finding keys and exits. Be mysterious and slightly ominous.';
+        
+        const fullPrompt = `${systemPrompt}\n\nUser: ${message}\n\nNPC:`;
+        
+        // Simplify the request for better compatibility
+        const requestBody = {
+          model: this.selectedModel,
+          prompt: fullPrompt,
+          stream: false
+          // Removing options to simplify the request
+        };
+        
+        if (this.debugMode) {
+          this.addSystemMessage(`Falling back to generate API with model: ${this.selectedModel}`);
+          this.addSystemMessage(`Request: ${JSON.stringify(requestBody).substring(0, 150)}...`);
+        }
+        
+        return fetch('http://localhost:11434/api/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        })
+        .then(response => {
+          if (this.debugMode) {
+            this.addSystemMessage(`Response status: ${response.status} ${response.statusText}`);
+          }
+          
+          if (!response.ok) {
+            throw new Error(`Generate API request failed: ${response.status} ${response.statusText}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          // Process the response
+          if (this.debugMode) {
+            this.addSystemMessage(`Response data: ${JSON.stringify(data).substring(0, 150)}...`);
+          }
+          
+          if (data && data.response) {
+            // Remove loading message
+            if (loadingMessage.parentNode) {
+              this.messagesContainer.removeChild(loadingMessage);
+            }
+            
+            const responseText = data.response;
+            
+            // Add AI message to chat
+            this.addMessage('ai', responseText);
+            
+            // Show word bubble above NPC
+            this.showWordBubble(responseText);
+            
+            return responseText;
+          } else {
+            throw new Error('Invalid response format from generate API: ' + JSON.stringify(data));
+          }
+        })
+        .catch(error => {
+          console.error('Generate API error:', error);
+          
+          // Check if this might be a CORS error
+          if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+            this.addSystemMessage('⚠️ Possible CORS error detected. Make sure Ollama is running with:');
+            this.addSystemMessage('OLLAMA_ORIGINS=http://localhost:8000 ollama serve');
+            this.addSystemMessage('Or for testing: OLLAMA_ORIGINS=* ollama serve');
+          } else {
+            this.addSystemMessage(`Generate API error: ${error.message}`);
+          }
+          
+          throw error; // Re-throw for final error handling
+        });
+      },
+      
+      addMessage: function(type, text, saveToHistory = true) {
+        const message = document.createElement('div');
+        message.className = `message ${type}`;
+        message.innerHTML = text;
+        this.messagesContainer.appendChild(message);
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        
+        if (saveToHistory) {
+          this.messages.push({ type, text });
+        }
+        
+        return message;
+      },
+      
+      addSystemMessage: function(text) {
+        const message = document.createElement('div');
+        message.className = 'message system';
+        message.style.backgroundColor = '#555';
+        message.style.fontStyle = 'italic';
+        message.textContent = text;
+        this.messagesContainer.appendChild(message);
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+      },
+      
+      showWordBubble: function(text) {
+        if (!this.npc) return;
+        
+        // Position the word bubble above the NPC
+        const screenPosition = this.getScreenPosition(this.npc.mesh.position);
+        
+        this.wordBubble.textContent = text;
+        this.wordBubble.style.left = `${screenPosition.x}px`;
+        this.wordBubble.style.top = `${screenPosition.y - 20}px`;
+        this.wordBubble.classList.add('visible');
+        
+        // Hide the bubble after 5 seconds
+        setTimeout(() => {
+          this.hideWordBubble();
+        }, 5000);
+      },
+      
+      hideWordBubble: function() {
+        this.wordBubble.classList.remove('visible');
+      },
+      
+      getScreenPosition: function(position) {
+        // Convert 3D position to screen coordinates
+        const vector = new THREE.Vector3(position.x, position.y + 2, position.z);
+        vector.project(game.camera);
+        
+        const gameContainer = document.querySelector('.game-container');
+        const width = gameContainer.clientWidth;
+        const height = gameContainer.clientHeight;
+        
+        return {
+          x: (vector.x * 0.5 + 0.5) * width,
+          y: (-vector.y * 0.5 + 0.5) * height
+        };
+      },
+      
+      testCorsSupport: function() {
+        console.log("Testing if Ollama supports CORS...");
+        this.addSystemMessage("Testing if Ollama supports CORS...");
+        
+        // Create a test OPTIONS request to check CORS support
+        fetch("http://localhost:11434/api/version", {
+          method: 'OPTIONS',
+          headers: {
+            'Origin': window.location.origin || 'http://localhost:8000'
+          }
+        })
+        .then(response => {
+          console.log("CORS test response:", response);
+          const corsHeaders = {
+            'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
+            'Access-Control-Allow-Methods': response.headers.get('Access-Control-Allow-Methods'),
+            'Access-Control-Allow-Headers': response.headers.get('Access-Control-Allow-Headers')
+          };
+          
+          console.log("CORS headers:", corsHeaders);
+          
+          if (corsHeaders['Access-Control-Allow-Origin']) {
+            this.addSystemMessage("✅ Ollama has CORS enabled!");
+            this.addSystemMessage(`Allowed origins: ${corsHeaders['Access-Control-Allow-Origin']}`);
+          } else {
+            this.addSystemMessage("❌ Ollama does not have CORS enabled.");
+            this.addSystemMessage("You need to run Ollama with: OLLAMA_ORIGINS=* ollama serve");
+          }
+        })
+        .catch(error => {
+          console.error("CORS test failed:", error);
+          this.addSystemMessage("❌ CORS test failed: " + error.message);
+          this.addSystemMessage("This suggests CORS is not properly configured.");
+        });
+      },
+    };
+  </script>
+</body>
+</html>
