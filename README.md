@@ -1,6 +1,7 @@
 # Voxel Maze Adventure
 
-![Voxel Maze Adventure](https://raw.githubusercontent.com/lalomorales22/Voxel-Maze-Adventure/main/screenshot.png)
+![Screenshot 2025-03-25 at 2 05 08 AM](https://github.com/user-attachments/assets/27047621-6172-4e9a-8a83-f8c1e77d8453)
+
 
 A browser-based 3D voxel adventure game featuring character customization, procedural maze generation, and AI-powered NPCs using Ollama.
 
